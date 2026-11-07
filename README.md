@@ -67,6 +67,13 @@ Each scanned field in the **Pre-Save Review Curtain Modal** displays an unmistak
 - **Dual Display in Cost & Usage Tab**: Displays exact scan cost in Indian Rupee paise (`~1.25 paise / scan`) alongside USD (`$0.00014 / scan`), with aggregate lifetime spend and average cost metrics.
 - **Audit Breakdown Modal**: Screeners and administrators can click "Exact AI Cost Breakdown" on any logged scan to inspect full token calculations and formula variables.
 
+### 7. Mobile-First Responsive Scan Result & Review Screen Architecture
+- **Dynamic Viewport Height Adaptation (`h-[100dvh]`)**: The Review Curtain modal adapts directly to mobile screen dimensions, replacing fixed pixel/vh margins with a seamless edge-to-edge modal container that prevents clipping by iOS/Android browser chrome.
+- **Direct Scan-to-Review Flow**: Eliminates intermediate fold barriers so every completed paper scan immediately launches the visual Review Curtain with color-coded certainty indicators.
+- **Compact Collapsible Patient Info**: Mobile headers feature a single-line patient token bar with an "Edit Info" toggle, conserving over 120px of vertical space for question checklists.
+- **Sticky Real-Time Triage Bottom Dock**: The calculated total score (`pts`), risk stratification badge (`HIGH_RISK`, `LOW_RISK`, `NO_RISK`), and "Confirm & Save" action are permanently anchored to the bottom with `safe-area-bottom` padding, updating dynamically as checkboxes are toggled.
+- **Mobile Result Cards for History Log**: Individual patient records in the Screening Log feature responsive mobile cards with touch-friendly triage badges, score counters, and audit detail viewers, avoiding horizontal table scroll issues on small screens.
+
 ---
 
 ## Technical Stack & Execution
@@ -76,4 +83,5 @@ Each scanned field in the **Pre-Save Review Curtain Modal** displays an unmistak
 - **AI Service**: Google Gen AI SDK (`@google/genai`) using `gemini-3.8-flash`.
 - **Client Utilities**: `jsQR` for in-browser QR decoding, HTML5 Canvas for EXIF scrubbing and image sanitization.
 - **Port**: Runs on port 3000.
+
 

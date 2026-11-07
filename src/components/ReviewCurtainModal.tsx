@@ -75,6 +75,7 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'flagged' | 'corrected'>('all');
   const [learningNotification, setLearningNotification] = useState<{ message: string; code: string } | null>(null);
+  const [isPatientInfoExpanded, setIsPatientInfoExpanded] = useState<boolean>(false);
 
   // Update answer state & learn on mistake whenever human corrects AI
   const handleAnswerToggle = (code: string, newAnswer: 'yes' | 'no' | 'unclear') => {
@@ -171,46 +172,47 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-7xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex flex-col sm:items-center sm:justify-center sm:p-4 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border-0 sm:border border-slate-200 dark:border-slate-800 sm:rounded-2xl w-full max-w-7xl h-[100dvh] sm:h-auto sm:max-h-[96vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Modal Top Bar */}
-        <div className="px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/60 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
+        <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/60 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
               <ClipboardCheck className="w-4 h-4" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  Pre-Save Verification Review Curtain
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 truncate">
+                  Review Curtain
                 </h2>
-                <span className="text-xs text-slate-500 dark:text-slate-400">·</span>
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  Human-in-the-loop audit
+                <span className="text-xs text-slate-400 hidden sm:inline">·</span>
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline">
+                  Human-in-the-loop verification
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Inspect AI recognition against the physical scanned sheet. Flagged marks require verification before record commit.
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-xs sm:max-w-none">
+                Verify AI detected marks against paper sheet before saving.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {flaggedCount > 0 ? (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 rounded-md text-xs font-medium">
+              <div className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 rounded-md text-[11px] sm:text-xs font-medium">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                <span>{flaggedCount} row{flaggedCount > 1 ? 's' : ''} flagged for review</span>
+                <span>{flaggedCount} flagged</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-md text-xs font-medium">
+              <div className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-md text-[11px] sm:text-xs font-medium">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span>All marks verified</span>
+                <span className="hidden sm:inline">All marks verified</span>
+                <span className="sm:hidden">Verified</span>
               </div>
             )}
 
             <button
               onClick={onCancel}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-1 sm:p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />
@@ -219,28 +221,30 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
         </div>
 
         {/* Mobile View Switcher (Visible on mobile only) */}
-        <div className="lg:hidden flex items-center border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 p-1.5 shrink-0 text-xs gap-1">
+        <div className="lg:hidden flex items-center border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 p-1.5 shrink-0 text-xs gap-1.5">
           <button
             type="button"
             onClick={() => setMobilePane('form')}
-            className={`flex-1 py-1.5 font-semibold text-center rounded-lg transition-colors ${
+            className={`flex-1 py-2 font-bold text-center rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
               mobilePane === 'form'
-                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs'
+                ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            Audit Answers ({answers.length})
+            <ClipboardCheck className="w-3.5 h-3.5" />
+            <span>Audit Answers ({answers.length})</span>
           </button>
           <button
             type="button"
             onClick={() => setMobilePane('image')}
-            className={`flex-1 py-1.5 font-semibold text-center rounded-lg transition-colors ${
+            className={`flex-1 py-2 font-bold text-center rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
               mobilePane === 'image'
-                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs'
+                ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            Inspect Physical Photo
+            <ZoomIn className="w-3.5 h-3.5" />
+            <span>Physical Photo</span>
           </button>
         </div>
 
@@ -248,7 +252,7 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden min-h-0">
           {/* Left Pane: Original Scanned Image / PDF Viewer (5 cols) */}
           <div
-            className={`lg:col-span-5 border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 flex flex-col min-h-[300px] lg:min-h-0 ${
+            className={`lg:col-span-5 border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 flex flex-col flex-1 min-h-0 ${
               mobilePane === 'image' ? 'flex' : 'hidden lg:flex'
             }`}
           >
@@ -318,114 +322,140 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
 
           {/* Right Pane: AI Recognition Checklist & Verification (7 cols) */}
           <div
-            className={`lg:col-span-7 flex flex-col overflow-hidden bg-white dark:bg-slate-900 ${
+            className={`lg:col-span-7 flex flex-col overflow-hidden bg-white dark:bg-slate-900 min-h-0 flex-1 ${
               mobilePane === 'form' ? 'flex' : 'hidden lg:flex'
             }`}
           >
-            {/* Patient Header Strip */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 shrink-0">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                      Patient Name
-                    </label>
-                    {matchedPatient && (
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
-                        <CheckCircle2 className="w-3 h-3" /> Roster Match
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    value={patientName}
-                    onChange={(e) => setPatientName(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100"
-                  />
+            {/* Patient Header Strip (Responsive: compact with toggle on mobile, full grid on desktop) */}
+            <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 shrink-0">
+              {/* Mobile Compact Patient Bar */}
+              <div className="flex sm:hidden items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 truncate">
+                  <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                    {patientName || 'Participant'}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500 truncate">
+                    · {patientId}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    · {patientAge}y/{patientGender[0]}
+                  </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPatientInfoExpanded(!isPatientInfoExpanded)}
+                  className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline shrink-0 ml-2 cursor-pointer"
+                >
+                  {isPatientInfoExpanded ? 'Hide' : 'Edit'}
+                </button>
+              </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                      Patient / Form ID
-                    </label>
-                    {detectedPatientId && (
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
-                        <QrCode className="w-3 h-3" /> QR Mapped
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    value={patientId}
-                    onChange={(e) => setPatientId(e.target.value)}
-                    className="w-full px-2.5 py-1.5 font-mono-tabular bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                    Age / Gender
-                  </label>
-                  <div className="flex gap-1.5">
+              {/* Detailed Form (Always visible on sm+, expandable on mobile) */}
+              <div className={`${isPatientInfoExpanded ? 'block mt-2 pt-2 border-t border-slate-200 dark:border-slate-700' : 'hidden sm:block'}`}>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        Patient Name
+                      </label>
+                      {matchedPatient && (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
+                          <CheckCircle2 className="w-3 h-3" /> Match
+                        </span>
+                      )}
+                    </div>
                     <input
-                      type="number"
-                      value={patientAge}
-                      onChange={(e) => setPatientAge(Number(e.target.value))}
-                      className="w-16 px-2 py-1.5 font-mono-tabular bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 text-center"
+                      type="text"
+                      value={patientName}
+                      onChange={(e) => setPatientName(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100"
                     />
-                    <select
-                      value={patientGender}
-                      onChange={(e) => setPatientGender(e.target.value as any)}
-                      className="flex-1 px-2 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
                   </div>
-                </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                      Camp / Location
-                    </label>
-                    {activeCamp && (
-                      <span className="text-[10px] text-sky-700 dark:text-sky-300 font-semibold truncate max-w-[120px]" title={activeCamp.name}>
-                        {activeCamp.name}
-                      </span>
-                    )}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        Patient / Form ID
+                      </label>
+                      {detectedPatientId && (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
+                          <QrCode className="w-3 h-3" /> QR
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={patientId}
+                      onChange={(e) => setPatientId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 font-mono-tabular bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100"
+                    />
                   </div>
-                  <input
-                    type="text"
-                    value={campLocation}
-                    onChange={(e) => setCampLocation(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100"
-                  />
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                      Age / Gender
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        value={patientAge}
+                        onChange={(e) => setPatientAge(Number(e.target.value))}
+                        className="w-16 px-2 py-1.5 font-mono-tabular bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 text-center"
+                      />
+                      <select
+                        value={patientGender}
+                        onChange={(e) => setPatientGender(e.target.value as any)}
+                        className="flex-1 px-2 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        Camp / Location
+                      </label>
+                      {activeCamp && (
+                        <span className="text-[10px] text-sky-700 dark:text-sky-300 font-semibold truncate max-w-[120px]" title={activeCamp.name}>
+                          {activeCamp.name}
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={campLocation}
+                      onChange={(e) => setCampLocation(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Filter & Active Learning Fast-Triage Toolbar */}
-            <div className="px-6 py-2.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg text-xs font-medium">
+            <div className="px-3 sm:px-6 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-slate-900 shrink-0 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg text-xs font-medium shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveFilter('all')}
-                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                  className={`px-2.5 sm:px-3 py-1 rounded-md transition-all cursor-pointer whitespace-nowrap ${
                     activeFilter === 'all'
                       ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 font-bold shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
-                  All Questions ({answers.length})
+                  All ({answers.length})
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveFilter('flagged')}
-                  className={`px-3 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-2.5 sm:px-3 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                     activeFilter === 'flagged'
                       ? 'bg-amber-500 text-white font-bold shadow-xs'
                       : flaggedCount > 0
@@ -434,32 +464,32 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
                   }`}
                 >
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Needs Verification ({flaggedCount})</span>
+                  <span>Needs Review ({flaggedCount})</span>
                 </button>
 
                 {overriddenCount > 0 && (
                   <button
                     type="button"
                     onClick={() => setActiveFilter('corrected')}
-                    className={`px-3 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-2.5 sm:px-3 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                       activeFilter === 'corrected'
                         ? 'bg-purple-600 text-white font-bold shadow-xs'
                         : 'text-purple-700 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-950/60 font-semibold'
                     }`}
                   >
                     <UserCheck className="w-3.5 h-3.5" />
-                    <span>Human Corrected ({overriddenCount})</span>
+                    <span>Corrected ({overriddenCount})</span>
                   </button>
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => setShowGujarati(!showGujarati)}
-                  className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 font-medium px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer"
+                  className="flex items-center gap-1 text-[11px] sm:text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 font-medium px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 transition-colors cursor-pointer whitespace-nowrap"
                 >
                   <Languages className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{showGujarati ? 'Show English' : 'Show Gujarati (ગુજરાતી)'}</span>
+                  <span>{showGujarati ? 'EN' : 'ગુજરાતી'}</span>
                 </button>
               </div>
             </div>
@@ -539,13 +569,6 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
                             <span className="font-mono-tabular text-slate-500 dark:text-slate-400">
                               YES = +{item.scoreYes} pt{item.scoreYes > 1 ? 's' : ''}
                             </span>
-
-                            {/* Question 5 special marker badge if active */}
-                            {item.rowNumber === 5 && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded border border-rose-200 dark:border-rose-800">
-                                Red Pen Audit Target
-                              </span>
-                            )}
                           </div>
 
                           <p
@@ -670,45 +693,45 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
               )}
             </div>
 
-            {/* Bottom Reviewer & Save Section */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 shrink-0">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Bottom Reviewer & Save Section (Sticky, always visible on mobile) */}
+            <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shrink-0 shadow-lg z-20 safe-area-bottom">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4">
                 {/* Real-time score & risk band */}
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <div className="px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block leading-tight">
-                      Calculated Total Score
+                <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 w-full sm:w-auto">
+                  <div className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center gap-2 sm:block shrink-0">
+                    <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 block leading-tight">
+                      Score
                     </span>
-                    <span className="text-xl font-bold font-mono-tabular text-slate-900 dark:text-slate-100">
-                      {totalScore} <span className="text-xs font-normal text-slate-500">pts</span>
+                    <span className="text-base sm:text-xl font-bold font-mono-tabular text-slate-900 dark:text-slate-100">
+                      {totalScore} <span className="text-[10px] sm:text-xs font-normal text-slate-500">pts</span>
                     </span>
                   </div>
 
-                  <div className={`px-4 py-2 rounded-lg border text-left ${guidance.badgeBg}`}>
-                    <span className="text-[11px] font-medium block uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      Risk Stratification
+                  <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg border text-left flex-1 sm:flex-initial ${guidance.badgeBg}`}>
+                    <span className="text-[9px] sm:text-[11px] font-medium block uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Triage Risk Result
                     </span>
-                    <span className={`text-sm font-bold ${guidance.colorClass}`}>
+                    <span className={`text-xs sm:text-sm font-bold truncate block ${guidance.colorClass}`}>
                       {guidance.label}
                     </span>
                   </div>
                 </div>
 
                 {/* Final Buttons */}
-                <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                   <button
                     onClick={onCancel}
-                    className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    className="flex-1 sm:flex-initial px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-700 text-center cursor-pointer"
                   >
-                    Cancel Scan
+                    Cancel
                   </button>
 
                   <button
                     onClick={handleSave}
-                    className="px-5 py-2.5 text-xs font-semibold text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white rounded-lg transition-colors shadow-xs flex items-center gap-1.5"
+                    className="flex-2 sm:flex-initial px-4 py-2 sm:px-5 sm:py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-lg transition-colors shadow-md flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >
                     <Check className="w-4 h-4" />
-                    <span>Confirm & Save Clinical Record</span>
+                    <span>Confirm & Save</span>
                   </button>
                 </div>
               </div>

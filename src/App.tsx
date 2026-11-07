@@ -263,7 +263,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'history' && <ScreeningHistoryLog records={records} camps={camps} />}
+        {activeTab === 'history' && <ScreeningHistoryLog records={records} camps={camps} defaultTab="log" />}
 
         {activeTab === 'questions' && (
           <QuestionBankAdmin

@@ -303,36 +303,8 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
         doctorInCharge: activeCamp?.doctorInCharge,
       };
 
-      // Check if low confidence triggers retry advisory (e.g. 3 or more answers < 60% confidence or avg < 65%)
-      if (lowConfidenceItems.length >= 3 || avgConfidence < 0.65) {
-        const reasons: string[] = [];
-        if (!sanitized.quality.isSharp) {
-          reasons.push('Camera blur or slight motion artifact on checkbox grid');
-        }
-        if (!sanitized.quality.isBalancedLighting) {
-          reasons.push('Uneven shadow gradient or glossy flash flare across columns');
-        }
-        if (reasons.length === 0) {
-          reasons.push(`${lowConfidenceItems.length} question boxes had faint or ambiguous handwritten marks`);
-        }
-
-        setLowConfidenceReport({
-          flaggedCount: lowConfidenceItems.length,
-          avgConfidencePct: Math.round(avgConfidence * 100),
-          reasons,
-          suggestedAngleCorrection:
-            'Hold your phone directly parallel at 90° directly above the paper. Avoid taking photos from an oblique or tilted angle which skews checkbox boundaries.',
-          suggestedLightingCorrection:
-            'Disable phone camera flash on glossy paper to avoid white specular glare. Use diffused ambient overhead room light with even illumination.',
-          suggestedFramingCorrection:
-            'Ensure all 4 outer paper borders and question codes (Que-1 to Que-13) are framed inside the camera view with 1–2 cm border padding.',
-          flaggedAnswers: lowConfidenceItems,
-          pendingParams,
-        });
-        return;
-      }
-
-      // Reset preflight inspection & open Review Curtain!
+      // Always open Review Curtain directly so the result screen is immediately visible on both mobile and desktop.
+      // Low confidence items are highlighted with color-coded amber badges and the fast-triage filter.
       setPendingInspection(null);
       setLowConfidenceReport(null);
       onScanComplete(pendingParams);

@@ -133,26 +133,18 @@ MARK RECOGNITION & INK COLOR RULES (CRITICAL):
    - You MUST actively look for and recognize **RED INK** markings with equal or higher priority as blue or black ink!
    - A **RED TICK (✓)**, red checkmark, red cross (X), red circled number ('0', '1', '4'), or red strike is an authoritative, primary mark! NEVER ignore, discount, or misinterpret red ink markings as stamp borders or background colors.
    - Blue ink, black ink, pencil graphite, and green ink are also fully recognized.
-4. TARGET AUDIT FOR ROW 5 (Que-5: Voice Change / Hoarseness > 3 weeks / સ્વર પેટીનું કેન્સર):
-   - Look specifically at Row 5 (Que-5 / 'સ્વર પેટીનું કેન્સર: તમારા અવાજમાં ફેરફાર છે?').
-   - Check Row 5 with highest visual care for any **RED TICK (✓)**, red check, or red pen stroke:
-     * If the red tick is in or near the **YES / 'હા' / '4'** column:
-       output answer: "yes", confidence: 0.96, notes: "Distinct red tick mark detected in YES (હા/4) column for Row 5 (Que-5)".
-     * If the red tick is in or near the **NO / 'ના' / '0'** column:
-       output answer: "no", confidence: 0.96, notes: "Distinct red tick mark detected in NO (ના/0) column for Row 5 (Que-5)".
-     * If the red tick is placed directly on the question row as a positive clinical indicator, classify as "yes".
-5. Patients may indicate their choice using multiple valid marking methods:
+4. Patients may indicate their choice using multiple valid marking methods:
    - Checkmark / Tick (✓ or ✔) in black, blue, or RED ink.
    - Cross / X mark (✗ or X).
    - Circled printed number: Common where patients circle '0' in the 'ના' column, or '1'/'4' in the 'હા' column.
    - Filled box, solid dot (•), or horizontal strike (—).
-6. Corrections & Cross-outs:
+5. Corrections & Cross-outs:
    - If a mark was made in one column and scribbled over or crossed out, and another mark is placed in the opposite column, classify according to the intentional, non-scribbled mark.
-7. Column Determination:
+6. Column Determination:
    - 'yes': Clear mark, tick, or circle in the YES / 'હા' / '1' or '4' column.
    - 'no': Clear mark, tick, or circle in the NO / 'ના' / '0' column.
    - 'unclear': Only if both columns are marked without correction, or if a mark is an ambiguous smudge directly on the dividing border between ના and હા.
-8. Gender-Specific Inapplicable Questions:
+7. Gender-Specific Inapplicable Questions:
    - Row 9 (Que-9): Prostate ('પ્રોસ્ટેટ કેન્સર - પુરુષ માટે') applies to MEN only.
    - Row 10 (Que-10): Breast ('સ્તન કેન્સર - મહિલાઓ માટે') applies to WOMEN.
    - Row 11 (Que-11): Cervix ('ગર્ભાશય/સર્વિક્સ - મહિલાઓ માટે') applies to WOMEN.
