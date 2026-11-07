@@ -42,8 +42,22 @@ export interface ScannedAnswer {
 
 export type RiskBand = 'NO_RISK' | 'LOW_RISK' | 'HIGH_RISK';
 
+export interface MedicalCamp {
+  id: string; // e.g. "camp-mehsana-2025"
+  name: string; // e.g. "Mehsana Community Oncology Screening Camp"
+  location: string; // e.g. "Civil Hospital Grounds, Mehsana"
+  date: string; // e.g. "2025-05-15"
+  organizer: string; // e.g. "Harikrishna Cancer Foundation"
+  doctorInCharge: string; // e.g. "Dr. S. Shah, MS (Surgical Oncology)"
+  status: 'ACTIVE' | 'UPCOMING' | 'COMPLETED';
+  notes?: string;
+  createdAt: string;
+}
+
 export interface ScreeningRecord {
   id: string;
+  campId?: string;
+  campName?: string;
   patientId?: string;
   patientName?: string;
   patientAge?: number;
@@ -85,4 +99,15 @@ export interface ImageQualityReport {
   isBalancedLighting: boolean;
   brightnessScore: number; // 0 to 255
   warningMessage?: string;
+}
+
+export interface RegisteredPatient {
+  id: string;
+  patientId: string; // e.g. "CAMP-2025-0814"
+  name: string;
+  age?: number;
+  gender?: 'Female' | 'Male' | 'Other';
+  campLocation?: string;
+  phone?: string;
+  notes?: string;
 }

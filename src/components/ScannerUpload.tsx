@@ -19,8 +19,16 @@ import {
   RotateCcw,
   ZoomIn,
 } from 'lucide-react';
-import { ScreeningQuestion, ScannedAnswer, ScanUsageLog, ImageQualityReport } from '../types/screening';
+import {
+  ScreeningQuestion,
+  ScannedAnswer,
+  ScanUsageLog,
+  ImageQualityReport,
+  RegisteredPatient,
+  MedicalCamp,
+} from '../types/screening';
 import { sanitizeAndResizeImage } from '../utils/imageProcessing';
+import { CampSessionBar } from './CampSessionBar';
 
 interface ScannerUploadProps {
   questions: ScreeningQuestion[];
@@ -31,9 +39,20 @@ interface ScannerUploadProps {
     imageHash: string;
     scannedAnswers: ScannedAnswer[];
     detectedPatientId?: string;
+    matchedPatient?: RegisteredPatient;
+    campId?: string;
+    campName?: string;
+    campLocation?: string;
+    doctorInCharge?: string;
   }) => void;
   previousHashes: string[];
   onLogUsage: (log: ScanUsageLog) => void;
+  registeredPatients: RegisteredPatient[];
+  camps: MedicalCamp[];
+  activeCamp: MedicalCamp | undefined;
+  onSelectActiveCamp: (campId: string) => void;
+  onSaveNewCamp: (camp: Omit<MedicalCamp, 'id' | 'createdAt'>) => void;
+  onOpenCampAdmin: () => void;
 }
 
 interface PendingInspection {
@@ -51,11 +70,40 @@ interface PendingInspection {
   isDuplicate: boolean;
 }
 
+interface LowConfidenceReport {
+  flaggedCount: number;
+  avgConfidencePct: number;
+  reasons: string[];
+  suggestedAngleCorrection: string;
+  suggestedLightingCorrection: string;
+  suggestedFramingCorrection: string;
+  flaggedAnswers: ScannedAnswer[];
+  pendingParams: {
+    sourceImageUrl: string;
+    sourceFileType: 'image/jpeg' | 'image/png' | 'application/pdf';
+    fileName: string;
+    imageHash: string;
+    scannedAnswers: ScannedAnswer[];
+    detectedPatientId?: string;
+    matchedPatient?: RegisteredPatient;
+    campId?: string;
+    campName?: string;
+    campLocation?: string;
+    doctorInCharge?: string;
+  };
+}
+
 export const ScannerUpload: React.FC<ScannerUploadProps> = ({
   questions,
   onScanComplete,
   previousHashes,
   onLogUsage,
+  registeredPatients,
+  camps = [],
+  activeCamp,
+  onSelectActiveCamp,
+  onSaveNewCamp,
+  onOpenCampAdmin,
 }) => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -66,6 +114,9 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
   const [pendingInspection, setPendingInspection] = useState<PendingInspection | null>(null);
   const [isPreviewZoomed, setIsPreviewZoomed] = useState<boolean>(false);
   const [manualPatientId, setManualPatientId] = useState<string>('');
+
+  // Low confidence AI retry guidance state
+  const [lowConfidenceReport, setLowConfidenceReport] = useState<LowConfidenceReport | null>(null);
 
   // Camera modal state
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
@@ -184,17 +235,60 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
 
       // Extract patient ID from manual input fallback, client-side QR decoder, or server AI vision
       const detectedPatientId = manualPatientId.trim() || sanitized.detectedQr || scanResult.detectedPatientId || undefined;
+      const matchedPatient = detectedPatientId
+        ? registeredPatients.find((p) => p.patientId.toLowerCase() === detectedPatientId.toLowerCase())
+        : undefined;
 
-      // Reset preflight inspection & open Review Curtain!
-      setPendingInspection(null);
-      onScanComplete({
+      const lowConfidenceItems = finalAnswers.filter((a) => a.confidence < 0.6 || a.answer === 'unclear');
+      const avgConfidence = finalAnswers.reduce((sum, a) => sum + a.confidence, 0) / (finalAnswers.length || 1);
+
+      const pendingParams = {
         sourceImageUrl: sanitized.dataUrl,
         sourceFileType: sanitized.mimeType as any,
         fileName: file.name,
         imageHash: sanitized.hash,
         scannedAnswers: finalAnswers,
         detectedPatientId,
-      });
+        matchedPatient,
+        campId: activeCamp?.id,
+        campName: activeCamp?.name,
+        campLocation: activeCamp?.location,
+        doctorInCharge: activeCamp?.doctorInCharge,
+      };
+
+      // Check if low confidence triggers retry advisory (e.g. 3 or more answers < 60% confidence or avg < 65%)
+      if (lowConfidenceItems.length >= 3 || avgConfidence < 0.65) {
+        const reasons: string[] = [];
+        if (!sanitized.quality.isSharp) {
+          reasons.push('Camera blur or slight motion artifact on checkbox grid');
+        }
+        if (!sanitized.quality.isBalancedLighting) {
+          reasons.push('Uneven shadow gradient or glossy flash flare across columns');
+        }
+        if (reasons.length === 0) {
+          reasons.push(`${lowConfidenceItems.length} question boxes had faint or ambiguous handwritten marks`);
+        }
+
+        setLowConfidenceReport({
+          flaggedCount: lowConfidenceItems.length,
+          avgConfidencePct: Math.round(avgConfidence * 100),
+          reasons,
+          suggestedAngleCorrection:
+            'Hold your phone directly parallel at 90° directly above the paper. Avoid taking photos from an oblique or tilted angle which skews checkbox boundaries.',
+          suggestedLightingCorrection:
+            'Disable phone camera flash on glossy paper to avoid white specular glare. Use diffused ambient overhead room light with even illumination.',
+          suggestedFramingCorrection:
+            'Ensure all 4 outer paper borders and question codes (Que-1 to Que-13) are framed inside the camera view with 1–2 cm border padding.',
+          flaggedAnswers: lowConfidenceItems,
+          pendingParams,
+        });
+        return;
+      }
+
+      // Reset preflight inspection & open Review Curtain!
+      setPendingInspection(null);
+      setLowConfidenceReport(null);
+      onScanComplete(pendingParams);
     } catch (err: unknown) {
       console.error('Scan processing error:', err);
       const msg = err instanceof Error ? err.message : String(err);
@@ -439,13 +533,22 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6">
+      {/* Active Medical Camp Session Bar */}
+      <CampSessionBar
+        camps={camps}
+        activeCamp={activeCamp}
+        onSelectActiveCamp={onSelectActiveCamp}
+        onSaveNewCamp={onSaveNewCamp}
+        onOpenCampAdmin={onOpenCampAdmin}
+      />
+
       {/* Hero Intro Header */}
       <div className="text-center max-w-3xl mx-auto pt-2">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
           Upload or Photograph Physical Paper Form
         </h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          Multimodal AI reads handwritten checks by fixed code (Que-1, Que-2...) or row numbers. Pre-flight inspector checks focus and lighting before sending to AI (estimated at ₹0.013 INR / scan).
+          Multimodal AI reads handwritten checks by fixed code (Que-1, Que-2...) or row numbers. Pre-flight inspector checks focus and lighting before sending to AI.
         </p>
       </div>
 
@@ -456,6 +559,119 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
           <div className="text-xs text-rose-800 dark:text-rose-300">
             <span className="font-semibold block text-sm">Processing Failure</span>
             {errorMsg}
+          </div>
+        </div>
+      )}
+
+      {/* LOW CONFIDENCE ANGLE & LIGHTING ADVISORY PANEL */}
+      {lowConfidenceReport && (
+        <div className="bg-amber-50/90 dark:bg-amber-950/70 border-2 border-amber-400 dark:border-amber-700 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-amber-200 dark:border-amber-800/80 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs uppercase font-bold tracking-wider text-amber-700 dark:text-amber-300">
+                  AI Reading Advisory · Action Recommended
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+                  Low Recognition Confidence Detected ({lowConfidenceReport.flaggedCount} uncertain marks · {lowConfidenceReport.avgConfidencePct}% avg)
+                </h3>
+              </div>
+            </div>
+          </div>
+
+          {/* Specific Guidance Cards for Angle, Lighting, and Framing */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            {/* Guidance 1: Camera Angle & Parallax */}
+            <div className="p-4 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
+                <Focus className="w-4 h-4 text-amber-600" />
+                <span>1. Camera Angle & Parallax</span>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                {lowConfidenceReport.suggestedAngleCorrection}
+              </p>
+              <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-[10px] text-slate-500 font-mono">
+                ✓ Tip: Align screen edges parallel with paper borders (perpendicular 90°)
+              </div>
+            </div>
+
+            {/* Guidance 2: Diffused Lighting & Glare */}
+            <div className="p-4 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
+                <Sun className="w-4 h-4 text-amber-600" />
+                <span>2. Lighting & Anti-Glare</span>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                {lowConfidenceReport.suggestedLightingCorrection}
+              </p>
+              <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-[10px] text-slate-500 font-mono">
+                ✓ Tip: Turn off camera flash to avoid specular flare on glossy print
+              </div>
+            </div>
+
+            {/* Guidance 3: Margins & Fixed Codes */}
+            <div className="p-4 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
+                <Camera className="w-4 h-4 text-amber-600" />
+                <span>3. Corner Margins & Codes</span>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                {lowConfidenceReport.suggestedFramingCorrection}
+              </p>
+              <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-[10px] text-slate-500 font-mono">
+                ✓ Tip: Keep Que-1 through Que-13 codes visible with 1-2 cm border space
+              </div>
+            </div>
+          </div>
+
+          {/* Flagged Rows Preview */}
+          <div className="p-3.5 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2 text-xs">
+            <span className="font-semibold text-slate-900 dark:text-slate-100 block">
+              Uncertain Checkboxes Requiring Attention ({lowConfidenceReport.flaggedAnswers.length}):
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {lowConfidenceReport.flaggedAnswers.map((ans) => (
+                <span
+                  key={ans.code}
+                  className="px-2.5 py-1 bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 rounded font-mono text-[11px]"
+                >
+                  {ans.code} (Row {ans.rowNumber}): {Math.round(ans.confidence * 100)}% conf
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Interactive Actions: Retake with guidance vs Proceed Anyway */}
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setLowConfidenceReport(null);
+                setPendingInspection(null);
+                startCamera();
+              }}
+              className="w-full sm:w-auto px-5 py-2.5 text-xs font-semibold text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-xs"
+            >
+              <RotateCcw className="w-4 h-4 text-amber-600" />
+              <span>Retake Photo with Recommended Angle & Lighting</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const params = lowConfidenceReport.pendingParams;
+                setLowConfidenceReport(null);
+                setPendingInspection(null);
+                onScanComplete(params);
+              }}
+              className="w-full sm:w-auto px-5 py-2.5 text-xs font-semibold text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white rounded-xl transition-colors shadow-xs flex items-center justify-center gap-2"
+            >
+              <span>Proceed to Manual Review Curtain Anyway</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
@@ -480,8 +696,9 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-slate-500 font-mono-tabular">
-                Estimated AI Cost: <strong className="text-slate-900 dark:text-slate-100">₹0.013 INR</strong>
+              <span className="text-xs text-slate-500 font-mono-tabular flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                Gemini 3.8 Flash Vision
               </span>
             </div>
           </div>
@@ -506,7 +723,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
               <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="text-xs text-amber-800 dark:text-amber-300">
                 <span className="font-semibold block text-sm">Duplicate Image Detected</span>
-                This exact image hash matches an earlier scan. Proceeding will incur a new AI read charge (~₹0.013).
+                This exact image hash matches an earlier scan. Proceeding will analyze the form again.
               </div>
             </div>
           )}
@@ -691,6 +908,46 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
                       No QR code found on the physical sheet. Provide the camp token or registration ID manually to link this scan.
                     </p>
                   )}
+
+                  {/* Roster Validation Indicator */}
+                  {(() => {
+                    const checkId = manualPatientId.trim() || pendingInspection.sanitized.detectedQr || '';
+                    if (!checkId) return null;
+                    const matched = registeredPatients.find(
+                      (p) => p.patientId.toLowerCase() === checkId.toLowerCase()
+                    );
+                    if (matched) {
+                      return (
+                        <div className="mt-2 p-2.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <div>
+                              <span className="font-semibold text-emerald-900 dark:text-emerald-200 block">
+                                Verified in Camp Roster: {matched.name}
+                              </span>
+                              <span className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                                {matched.age ? `${matched.age}y` : ''} {matched.gender ? `· ${matched.gender}` : ''} {matched.campLocation ? `· ${matched.campLocation}` : ''}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase tracking-wider shrink-0">
+                            Verified
+                          </span>
+                        </div>
+                      );
+                    }
+                    if (registeredPatients.length > 0) {
+                      return (
+                        <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
+                          <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>
+                            ID "{checkId}" is not in the imported camp roster. Will register as a walk-in participant.
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
 
@@ -711,7 +968,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
                   disabled={isProcessing}
                   className="w-full sm:w-auto px-6 py-2.5 text-xs font-semibold text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white rounded-xl transition-colors shadow-xs flex items-center justify-center gap-2"
                 >
-                  <span>Proceed to AI Vision Scan (₹0.013)</span>
+                  <span>Proceed to AI Vision Scan</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -814,7 +1071,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
             </h4>
           </div>
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            Includes QR Code stamps and image quality checks (~₹0.013 INR)
+            Includes QR Code stamps and image quality checks
           </span>
         </div>
 

@@ -14,7 +14,7 @@ import {
   ShieldAlert,
   QrCode,
 } from 'lucide-react';
-import { ScannedAnswer, ScreeningRecord, RiskBand } from '../types/screening';
+import { ScannedAnswer, ScreeningRecord, RiskBand, RegisteredPatient, MedicalCamp } from '../types/screening';
 import { calculateScreeningScore } from '../data/screeningData';
 
 interface ReviewCurtainModalProps {
@@ -24,6 +24,8 @@ interface ReviewCurtainModalProps {
   imageHash?: string;
   initialAnswers: ScannedAnswer[];
   detectedPatientId?: string;
+  matchedPatient?: RegisteredPatient;
+  activeCamp?: MedicalCamp;
   onConfirmSave: (record: ScreeningRecord) => void;
   onCancel: () => void;
 }
@@ -35,22 +37,33 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
   imageHash,
   initialAnswers,
   detectedPatientId,
+  matchedPatient,
+  activeCamp,
   onConfirmSave,
   onCancel,
 }) => {
   const [answers, setAnswers] = useState<ScannedAnswer[]>(initialAnswers);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [showGujarati, setShowGujarati] = useState<boolean>(true);
+  const [mobilePane, setMobilePane] = useState<'form' | 'image'>('form');
 
-  // Patient / Camp metadata - pre-filled from QR code detection if available
-  const [patientName, setPatientName] = useState<string>('Rameshbhai Patel');
-  const [patientId, setPatientId] = useState<string>(
-    detectedPatientId || `CAMP-${Math.floor(1000 + Math.random() * 9000)}`
+  // Patient / Camp metadata - pre-filled from active camp, QR code detection, or matched camp roster
+  const [patientName, setPatientName] = useState<string>(
+    matchedPatient?.name || 'Rameshbhai Patel'
   );
-  const [patientAge, setPatientAge] = useState<number>(54);
-  const [patientGender, setPatientGender] = useState<'Male' | 'Female' | 'Other'>('Male');
-  const [campLocation, setCampLocation] = useState<string>('Mehsana Community Camp');
-  const [reviewedBy, setReviewedBy] = useState<string>('Dr. S. Shah (Oncology Triage)');
+  const [patientId, setPatientId] = useState<string>(
+    matchedPatient?.patientId || detectedPatientId || `CAMP-${Math.floor(1000 + Math.random() * 9000)}`
+  );
+  const [patientAge, setPatientAge] = useState<number>(matchedPatient?.age || 54);
+  const [patientGender, setPatientGender] = useState<'Male' | 'Female' | 'Other'>(
+    matchedPatient?.gender || 'Male'
+  );
+  const [campLocation, setCampLocation] = useState<string>(
+    matchedPatient?.campLocation || activeCamp?.location || 'Mehsana Community Camp'
+  );
+  const [reviewedBy, setReviewedBy] = useState<string>(
+    activeCamp?.doctorInCharge || 'Dr. S. Shah (Oncology Triage)'
+  );
   const [reviewNotes, setReviewNotes] = useState<string>('');
 
   // Update answer state
@@ -84,6 +97,8 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
 
     const record: ScreeningRecord = {
       id: `scr-${Date.now()}`,
+      campId: activeCamp?.id,
+      campName: activeCamp?.name,
       patientId,
       patientName,
       patientAge,
@@ -157,10 +172,40 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
           </div>
         </div>
 
+        {/* Mobile View Switcher (Visible on mobile only) */}
+        <div className="lg:hidden flex items-center border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 p-1.5 shrink-0 text-xs gap-1">
+          <button
+            type="button"
+            onClick={() => setMobilePane('form')}
+            className={`flex-1 py-1.5 font-semibold text-center rounded-lg transition-colors ${
+              mobilePane === 'form'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            Audit Answers ({answers.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobilePane('image')}
+            className={`flex-1 py-1.5 font-semibold text-center rounded-lg transition-colors ${
+              mobilePane === 'image'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            Inspect Physical Photo
+          </button>
+        </div>
+
         {/* Modal Main Body: Split Screen */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden min-h-0">
           {/* Left Pane: Original Scanned Image / PDF Viewer (5 cols) */}
-          <div className="lg:col-span-5 border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 flex flex-col min-h-[300px] lg:min-h-0">
+          <div
+            className={`lg:col-span-5 border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 flex flex-col min-h-[300px] lg:min-h-0 ${
+              mobilePane === 'image' ? 'flex' : 'hidden lg:flex'
+            }`}
+          >
             {/* Viewer Controls */}
             <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 flex items-center justify-between shrink-0">
               <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[200px]">
@@ -226,14 +271,25 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
           </div>
 
           {/* Right Pane: AI Recognition Checklist & Verification (7 cols) */}
-          <div className="lg:col-span-7 flex flex-col overflow-hidden bg-white dark:bg-slate-900">
+          <div
+            className={`lg:col-span-7 flex flex-col overflow-hidden bg-white dark:bg-slate-900 ${
+              mobilePane === 'form' ? 'flex' : 'hidden lg:flex'
+            }`}
+          >
             {/* Patient Header Strip */}
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 shrink-0">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                    Patient Name
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      Patient Name
+                    </label>
+                    {matchedPatient && (
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
+                        <CheckCircle2 className="w-3 h-3" /> Roster Match
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={patientName}
@@ -285,9 +341,16 @@ export const ReviewCurtainModal: React.FC<ReviewCurtainModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                    Camp / Location
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      Camp / Location
+                    </label>
+                    {activeCamp && (
+                      <span className="text-[10px] text-sky-700 dark:text-sky-300 font-semibold truncate max-w-[120px]" title={activeCamp.name}>
+                        {activeCamp.name}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={campLocation}

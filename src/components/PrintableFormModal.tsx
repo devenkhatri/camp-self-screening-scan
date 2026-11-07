@@ -51,7 +51,7 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
     setPatientId(`CAMP-MH-${Math.floor(1000 + Math.random() * 9000)}`);
   };
 
-  // Direct client-side A4 PDF generation and download
+  // Direct client-side A4 PDF generation and download (guaranteed 1 single page)
   const handleDownloadPdf = async () => {
     if (!printAreaRef.current) return;
     setIsGeneratingPdf(true);
@@ -77,28 +77,30 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
 
       const pdfWidth = 210; // A4 standard width in mm
       const pdfHeight = 297; // A4 standard height in mm
+      const margin = 8;
+      const printableWidth = pdfWidth - margin * 2;
+      const printableHeight = pdfHeight - margin * 2;
 
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      const imgWidth = printableWidth;
+      const imgHeight = (canvas.height * printableWidth) / canvas.width;
 
-      if (imgHeight <= pdfHeight) {
-        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+      // Ensure 100% single page placement
+      if (imgHeight <= printableHeight) {
+        pdf.addImage(imgData, 'JPEG', margin, margin, imgWidth, imgHeight);
       } else {
-        // Scale to fit cleanly on single A4 sheet
-        const scale = pdfHeight / imgHeight;
+        const scale = printableHeight / imgHeight;
         const scaledWidth = imgWidth * scale;
-        const offsetX = (pdfWidth - scaledWidth) / 2;
-        pdf.addImage(imgData, 'JPEG', offsetX, 0, scaledWidth, pdfHeight);
+        const offsetX = margin + (printableWidth - scaledWidth) / 2;
+        pdf.addImage(imgData, 'JPEG', offsetX, margin, scaledWidth, printableHeight);
       }
 
-      const fileName = `Cancer_Screening_Form_${patientId || 'A4'}.pdf`;
+      const fileName = `Cancer_Screening_Form_1Page_${patientId || 'A4'}.pdf`;
       pdf.save(fileName);
 
-      setDownloadSuccessNotice(`Downloaded ${fileName} successfully! Ready to print and distribute.`);
+      setDownloadSuccessNotice(`Downloaded ${fileName} successfully! Guaranteed 1-page print.`);
       setTimeout(() => setDownloadSuccessNotice(null), 6000);
     } catch (err: unknown) {
       console.error('Failed to export PDF directly:', err);
-      // Fallback to browser print if available
       window.print();
     } finally {
       setIsGeneratingPdf(false);
@@ -111,6 +113,40 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6">
+      {/* Strict 1-Page Print Stylesheet */}
+      <style>{`
+        @page {
+          size: A4 portrait;
+          margin: 6mm 8mm;
+        }
+        @media print {
+          html, body {
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-single-page {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            max-height: 285mm !important;
+            overflow: hidden !important;
+          }
+        }
+      `}</style>
       {/* Configuration & Action Bar (Hidden when printing) */}
       <div className="no-print p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
         <div>
@@ -225,127 +261,127 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
         </div>
       )}
 
-      {/* The Printable Paper Sheet (Captured by html2canvas into PDF) */}
+      {/* The Printable Paper Sheet (Captured by html2canvas into PDF - 1 Page Strict) */}
       <div
         ref={printAreaRef}
-        className="bg-white text-slate-900 p-8 sm:p-12 rounded-xl border border-slate-300 shadow-lg max-w-[850px] mx-auto print:border-none print:shadow-none print:p-0 print:m-0"
+        className="print-single-page bg-white text-slate-900 p-5 sm:p-6 rounded-xl border border-slate-300 shadow-lg max-w-[820px] mx-auto print:border-none print:shadow-none print:p-0 print:m-0"
       >
-        {/* Printable Header */}
-        <div className="border-b-2 border-slate-900 pb-4 mb-6">
+        {/* Printable Header (Compact 1-Page Layout) */}
+        <div className="border-b-2 border-slate-900 pb-2 mb-2">
           <div className="flex items-start justify-between">
-            <div className="flex-1 pr-4">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block">
+            <div className="flex-1 pr-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
                 COMMUNITY ONCOLOGY PROGRAM · ONCO DIGITAL
               </span>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 uppercase">
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 uppercase">
                 Cancer Self-Screening Questionnaire (કેન્સર સ્વ-તપાસ)
               </h1>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Take 5 minutes to complete at home or camp. Check marks are read automatically by AI vision using question codes.
+              <p className="text-[10px] text-slate-600 mt-0.5">
+                Complete at home or camp. Handwritten check marks are read automatically by AI vision using question codes.
               </p>
             </div>
 
-            {/* QR / Patient ID Stamp Box */}
-            <div className="w-28 border-2 border-slate-900 rounded-lg p-1.5 flex flex-col items-center justify-center text-center shrink-0 bg-white">
+            {/* QR / Patient ID Stamp Box (Compact) */}
+            <div className="w-20 border-[1.5px] border-slate-900 rounded p-1 flex flex-col items-center justify-center text-center shrink-0 bg-white">
               {qrCodeDataUrl ? (
                 <img
                   src={qrCodeDataUrl}
                   alt={`Patient QR ${patientId}`}
-                  className="w-20 h-20 object-contain mx-auto"
+                  className="w-14 h-14 object-contain mx-auto"
                 />
               ) : (
-                <QrCode className="w-12 h-12 text-slate-800 mb-0.5" />
+                <QrCode className="w-10 h-10 text-slate-800 mb-0.5" />
               )}
-              <span className="text-[9px] font-mono font-bold leading-tight uppercase text-slate-900 truncate max-w-[100px] mt-0.5">
+              <span className="text-[8px] font-mono font-bold leading-tight uppercase text-slate-900 truncate max-w-[75px] mt-0.5">
                 {patientId}
               </span>
-              <span className="text-[7px] text-slate-500 uppercase tracking-wider font-semibold">
-                SCANNER QR CODE
+              <span className="text-[6.5px] text-slate-500 uppercase tracking-wider font-semibold">
+                SCANNER QR
               </span>
             </div>
           </div>
 
-          {/* Fillable Meta Fields */}
-          <div className="grid grid-cols-4 gap-4 mt-4 pt-3 border-t border-slate-200 text-xs">
+          {/* Fillable Meta Fields (Compact) */}
+          <div className="grid grid-cols-4 gap-2 mt-2 pt-1.5 border-t border-slate-200 text-[10px]">
             <div>
-              <span className="text-[10px] text-slate-500 block uppercase">Name / નામ</span>
-              <div className="border-b border-slate-400 h-6"></div>
+              <span className="text-[9px] text-slate-500 block uppercase">Name / નામ</span>
+              <div className="border-b border-slate-400 h-4"></div>
             </div>
             <div>
-              <span className="text-[10px] text-slate-500 block uppercase">Age / Gender (ઉંમર)</span>
-              <div className="border-b border-slate-400 h-6"></div>
+              <span className="text-[9px] text-slate-500 block uppercase">Age / Gender (ઉંમર)</span>
+              <div className="border-b border-slate-400 h-4"></div>
             </div>
             <div>
-              <span className="text-[10px] text-slate-500 block uppercase">Phone / ફોન નંબર</span>
-              <div className="border-b border-slate-400 h-6"></div>
+              <span className="text-[9px] text-slate-500 block uppercase">Phone / ફોન નંબર</span>
+              <div className="border-b border-slate-400 h-4"></div>
             </div>
             <div>
-              <span className="text-[10px] text-slate-500 block uppercase">Date & Camp Location</span>
-              <div className="border-b border-slate-400 h-6"></div>
+              <span className="text-[9px] text-slate-500 block uppercase">Date & Camp Location</span>
+              <div className="border-b border-slate-400 h-4"></div>
             </div>
           </div>
         </div>
 
-        {/* Instructions banner */}
-        <div className="p-2.5 bg-slate-100 rounded-md border border-slate-300 text-xs text-slate-800 mb-4 flex items-center justify-between">
+        {/* Instructions banner (Compact) */}
+        <div className="py-1 px-2.5 bg-slate-100 rounded border border-slate-300 text-[10px] text-slate-800 mb-2 flex items-center justify-between">
           <span>
-            <strong>Instructions:</strong> Use a blue or black pen. Mark a clear tick (✓) in either the <strong>NO</strong> or <strong>YES</strong> box for each row.
+            <strong>Instructions:</strong> Use blue/black pen. Mark a clear tick (✓) in <strong>NO</strong> or <strong>YES</strong> box.
           </span>
-          <span className="font-gujarati text-[11px] text-slate-700">
+          <span className="font-gujarati text-[10.5px] text-slate-700">
             દરેક પ્રશ્ન માટે <strong>ના</strong> અથવા <strong>હા</strong> ના ખાનામાં ખરાની (✓) નિશાની કરો.
           </span>
         </div>
 
-        {/* The Questions Table */}
-        <div className="border border-slate-300 rounded-lg overflow-hidden">
+        {/* The Questions Table (Compact, 1 Page for all 13 questions) */}
+        <div className="border border-slate-300 rounded overflow-hidden">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-200 border-b border-slate-300 font-bold text-slate-900">
-                <th className="py-2.5 px-3 w-16 text-center font-mono">CODE</th>
-                <th className="py-2.5 px-3">QUESTION / CLINICAL SCREENING SYMPTOM</th>
-                <th className="py-2.5 px-3 w-24 text-center border-l border-slate-300">
+              <tr className="bg-slate-200 border-b border-slate-300 font-bold text-slate-900 text-[10px]">
+                <th className="py-1 px-2 w-14 text-center font-mono">CODE</th>
+                <th className="py-1 px-2">QUESTION / CLINICAL SCREENING SYMPTOM</th>
+                <th className="py-1 px-2 w-20 text-center border-l border-slate-300">
                   NO<br />
-                  <span className="font-gujarati font-normal text-[11px]">ના (0)</span>
+                  <span className="font-gujarati font-normal text-[10px]">ના (0)</span>
                 </th>
-                <th className="py-2.5 px-3 w-28 text-center border-l border-slate-300">
+                <th className="py-1 px-2 w-20 text-center border-l border-slate-300">
                   YES<br />
-                  <span className="font-gujarati font-normal text-[11px]">હા (1/4)</span>
+                  <span className="font-gujarati font-normal text-[10px]">હા (1/4)</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {questions.map((q) => (
                 <tr key={q.code} className="hover:bg-slate-50">
-                  <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-900 border-r border-slate-200">
+                  <td className="py-1 px-1.5 text-center font-mono font-bold text-[10px] text-slate-900 border-r border-slate-200">
                     {q.code}
                   </td>
-                  <td className="py-2.5 px-3 text-slate-800 leading-snug">
+                  <td className="py-1 px-2 text-slate-800 leading-tight">
                     {printLanguage === 'bilingual' && (
                       <div>
-                        <div className="font-gujarati font-medium text-slate-950 mb-0.5">
+                        <div className="font-gujarati font-medium text-slate-950 text-[11px] leading-tight mb-0.5">
                           {q.textGu || q.textEn}
                         </div>
-                        <div className="text-[11px] text-slate-600">
+                        <div className="text-[9.5px] text-slate-600 leading-tight">
                           {q.textEn}
                         </div>
                       </div>
                     )}
                     {printLanguage === 'english' && (
-                      <div className="font-medium text-slate-900">{q.textEn}</div>
+                      <div className="font-medium text-slate-900 text-[11px] leading-tight">{q.textEn}</div>
                     )}
                     {printLanguage === 'gujarati' && (
-                      <div className="font-gujarati font-medium text-slate-950 text-sm">
+                      <div className="font-gujarati font-medium text-slate-950 text-[12px] leading-tight">
                         {q.textGu || q.textEn}
                       </div>
                     )}
                   </td>
                   {/* NO Checkbox */}
-                  <td className="py-2.5 px-3 text-center border-l border-slate-200">
-                    <div className="w-6 h-6 border-2 border-slate-600 rounded mx-auto"></div>
+                  <td className="py-1 px-2 text-center border-l border-slate-200">
+                    <div className="w-4.5 h-4.5 border-[1.5px] border-slate-700 rounded-xs mx-auto"></div>
                   </td>
                   {/* YES Checkbox */}
-                  <td className="py-2.5 px-3 text-center border-l border-slate-200">
-                    <div className="w-6 h-6 border-2 border-slate-600 rounded mx-auto"></div>
+                  <td className="py-1 px-2 text-center border-l border-slate-200">
+                    <div className="w-4.5 h-4.5 border-[1.5px] border-slate-700 rounded-xs mx-auto"></div>
                   </td>
                 </tr>
               ))}
@@ -353,12 +389,12 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
           </table>
         </div>
 
-        {/* Printable Footer */}
-        <div className="mt-6 pt-4 border-t border-slate-300 text-[10px] text-slate-500 flex items-center justify-between">
+        {/* Printable Footer (Compact) */}
+        <div className="mt-2 pt-1 border-t border-slate-300 text-[9px] text-slate-500 flex items-center justify-between">
           <span>
-            Clinical Risk Tiers: Score 0 = No Risk · Score 1–3 = Low Risk (Screening Test) · Score 4+ = High Risk (Consult Doctor Immediately)
+            Clinical Risk Tiers: Score 0 = No Risk · Score 1–3 = Low Risk (Screening Test) · Score 4+ = High Risk (Immediate Doctor Review)
           </span>
-          <span className="font-mono">FORM-VER-2026.04</span>
+          <span className="font-mono">FORM-VER-2026.04 · 1-PAGE A4</span>
         </div>
       </div>
     </div>

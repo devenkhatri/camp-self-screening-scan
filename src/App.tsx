@@ -11,8 +11,15 @@ import {
   ScreeningRecord,
   ScanUsageLog,
   ScannedAnswer,
+  RegisteredPatient,
+  MedicalCamp,
 } from './types/screening';
-import { DEFAULT_SCREENING_QUESTIONS } from './data/screeningData';
+import {
+  DEFAULT_SCREENING_QUESTIONS,
+  DEFAULT_REGISTERED_PATIENTS,
+  DEFAULT_MEDICAL_CAMPS,
+  DEFAULT_SAMPLE_SCREENING_RECORDS,
+} from './data/screeningData';
 import { CheckCircle2, AlertTriangle, X } from 'lucide-react';
 
 interface ToastMessage {
@@ -39,9 +46,12 @@ export default function App() {
   const [records, setRecords] = useState<ScreeningRecord[]>(() => {
     try {
       const saved = localStorage.getItem('paper_scan_records');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch {}
-    return [];
+    return DEFAULT_SAMPLE_SCREENING_RECORDS;
   });
 
   const [usageLogs, setUsageLogs] = useState<ScanUsageLog[]>(() => {
@@ -52,6 +62,31 @@ export default function App() {
     return [];
   });
 
+  const [registeredPatients, setRegisteredPatients] = useState<RegisteredPatient[]>(() => {
+    try {
+      const saved = localStorage.getItem('paper_scan_patients');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_REGISTERED_PATIENTS;
+  });
+
+  // Medical Camps State with LocalStorage persistence
+  const [camps, setCamps] = useState<MedicalCamp[]>(() => {
+    try {
+      const saved = localStorage.getItem('paper_scan_camps');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_MEDICAL_CAMPS;
+  });
+
+  const [activeCampId, setActiveCampId] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('paper_scan_active_camp_id');
+      if (saved) return saved;
+    } catch {}
+    return DEFAULT_MEDICAL_CAMPS[0]?.id || '';
+  });
+
   // Review Curtain State
   const [reviewCurtainData, setReviewCurtainData] = useState<{
     sourceImageUrl: string;
@@ -60,6 +95,11 @@ export default function App() {
     imageHash: string;
     scannedAnswers: ScannedAnswer[];
     detectedPatientId?: string;
+    matchedPatient?: RegisteredPatient;
+    campId?: string;
+    campName?: string;
+    campLocation?: string;
+    doctorInCharge?: string;
   } | null>(null);
 
   // Toast notifications
@@ -95,6 +135,42 @@ export default function App() {
     localStorage.setItem('paper_scan_usage_logs', JSON.stringify(usageLogs));
   }, [usageLogs]);
 
+  useEffect(() => {
+    localStorage.setItem('paper_scan_patients', JSON.stringify(registeredPatients));
+  }, [registeredPatients]);
+
+  useEffect(() => {
+    localStorage.setItem('paper_scan_camps', JSON.stringify(camps));
+  }, [camps]);
+
+  useEffect(() => {
+    if (activeCampId) {
+      localStorage.setItem('paper_scan_active_camp_id', activeCampId);
+    }
+  }, [activeCampId]);
+
+  // Active camp derived object
+  const activeCamp = camps.find((c) => c.id === activeCampId) || camps[0];
+
+  const handleSelectActiveCamp = (campId: string) => {
+    setActiveCampId(campId);
+    const chosen = camps.find((c) => c.id === campId);
+    if (chosen) {
+      addToast(`Switched active screening session to "${chosen.name}" (${chosen.location})`, 'info');
+    }
+  };
+
+  const handleSaveNewCamp = (campData: Omit<MedicalCamp, 'id' | 'createdAt'>) => {
+    const newCamp: MedicalCamp = {
+      ...campData,
+      id: `camp-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    setCamps((prev) => [newCamp, ...prev]);
+    setActiveCampId(newCamp.id);
+    addToast(`Medical Camp "${newCamp.name}" created and set as active session`, 'success');
+  };
+
   const toggleDarkMode = () => {
     setIsDarkMode((prev) => !prev);
   };
@@ -129,6 +205,11 @@ export default function App() {
     imageHash: string;
     scannedAnswers: ScannedAnswer[];
     detectedPatientId?: string;
+    matchedPatient?: RegisteredPatient;
+    campId?: string;
+    campName?: string;
+    campLocation?: string;
+    doctorInCharge?: string;
   }) => {
     setReviewCurtainData(params);
   };
@@ -165,24 +246,37 @@ export default function App() {
         toggleDarkMode={toggleDarkMode}
       />
 
-      {/* Main Viewport Container */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Viewport Container (mobile-friendly padding with bottom dock safe clearance) */}
+      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 md:pb-8">
         {activeTab === 'scan' && (
           <ScannerUpload
             questions={questions}
             onScanComplete={handleScanComplete}
             previousHashes={previousHashes}
             onLogUsage={handleLogUsage}
+            registeredPatients={registeredPatients}
+            camps={camps}
+            activeCamp={activeCamp}
+            onSelectActiveCamp={handleSelectActiveCamp}
+            onSaveNewCamp={handleSaveNewCamp}
+            onOpenCampAdmin={() => setActiveTab('questions')}
           />
         )}
 
-        {activeTab === 'history' && <ScreeningHistoryLog records={records} />}
+        {activeTab === 'history' && <ScreeningHistoryLog records={records} camps={camps} />}
 
         {activeTab === 'questions' && (
           <QuestionBankAdmin
             questions={questions}
             setQuestions={setQuestions}
             onAssignMissingCodes={handleAssignMissingCodes}
+            registeredPatients={registeredPatients}
+            setRegisteredPatients={setRegisteredPatients}
+            camps={camps}
+            setCamps={setCamps}
+            activeCampId={activeCampId}
+            onSelectActiveCamp={handleSelectActiveCamp}
+            records={records}
           />
         )}
 
@@ -216,6 +310,8 @@ export default function App() {
           imageHash={reviewCurtainData.imageHash}
           initialAnswers={reviewCurtainData.scannedAnswers}
           detectedPatientId={reviewCurtainData.detectedPatientId}
+          matchedPatient={reviewCurtainData.matchedPatient}
+          activeCamp={activeCamp}
           onConfirmSave={handleConfirmSaveRecord}
           onCancel={() => setReviewCurtainData(null)}
         />

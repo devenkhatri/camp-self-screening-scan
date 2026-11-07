@@ -13,6 +13,14 @@ import {
   Activity,
   Calendar,
   X,
+  Building2,
+  BarChart2,
+  Flame,
+  ArrowUpRight,
+  Stethoscope,
+  Target,
+  ArrowRight,
+  MapPin,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -26,33 +34,170 @@ import {
   PieChart,
   Pie,
   Cell,
+  ReferenceLine,
 } from 'recharts';
-import { ScreeningRecord, RiskBand } from '../types/screening';
+import { ScreeningRecord, RiskBand, MedicalCamp } from '../types/screening';
 import { RISK_BANDS_GUIDANCE } from '../data/screeningData';
+
+export interface CampPerformanceMetric {
+  campId: string;
+  campName: string;
+  shortName: string;
+  location: string;
+  date: string;
+  doctorInCharge: string;
+  organizer: string;
+  totalScreened: number;
+  highRiskCount: number;
+  lowRiskCount: number;
+  noRiskCount: number;
+  highRiskPct: number;
+  lowRiskPct: number;
+  noRiskPct: number;
+  avgScore: number;
+  prevalenceTier: 'CRITICAL_HIGH' | 'MODERATE' | 'LOW';
+}
 
 interface ScreeningHistoryLogProps {
   records: ScreeningRecord[];
+  camps?: MedicalCamp[];
   onSelectRecord?: (record: ScreeningRecord) => void;
 }
 
-export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ records }) => {
+export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ records, camps = [] }) => {
+  const [dashboardTab, setDashboardTab] = useState<'performance' | 'log'>('performance');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBand, setSelectedBand] = useState<'ALL' | RiskBand>('ALL');
+  const [selectedCampId, setSelectedCampId] = useState<'ALL' | string>('ALL');
   const [activeModalRecord, setActiveModalRecord] = useState<ScreeningRecord | null>(null);
 
-  // High-level summary metrics
-  const totalCount = records.length;
-  const highRiskCount = useMemo(() => records.filter((r) => r.riskBand === 'HIGH_RISK').length, [records]);
-  const lowRiskCount = useMemo(() => records.filter((r) => r.riskBand === 'LOW_RISK').length, [records]);
-  const noRiskCount = useMemo(() => records.filter((r) => r.riskBand === 'NO_RISK').length, [records]);
+  // Compute Camp Performance Analytics & Risk Distribution per Camp
+  const campPerformanceStats = useMemo<CampPerformanceMetric[]>(() => {
+    const campMap = new Map<
+      string,
+      {
+        campId: string;
+        campName: string;
+        location: string;
+        date: string;
+        doctorInCharge: string;
+        organizer: string;
+      }
+    >();
+
+    // Seed from known registered camps
+    camps.forEach((c) => {
+      campMap.set(c.id, {
+        campId: c.id,
+        campName: c.name,
+        location: c.location,
+        date: c.date,
+        doctorInCharge: c.doctorInCharge,
+        organizer: c.organizer,
+      });
+    });
+
+    // Capture any additional camps directly referenced in records
+    records.forEach((r) => {
+      const id = r.campId || r.campName || 'unassigned-camp';
+      if (!campMap.has(id)) {
+        campMap.set(id, {
+          campId: id,
+          campName: r.campName || r.campLocation || 'Community Screening Camp',
+          location: r.campLocation || 'Gujarat',
+          date: r.timestamp.slice(0, 10),
+          doctorInCharge: r.reviewedBy || 'Attending Oncologist',
+          organizer: 'Community Health Trust',
+        });
+      }
+    });
+
+    const metrics: CampPerformanceMetric[] = Array.from(campMap.values()).map((camp) => {
+      const matching = records.filter(
+        (r) =>
+          r.campId === camp.campId ||
+          (r.campName && r.campName === camp.campName) ||
+          (r.campLocation && r.campLocation === camp.location)
+      );
+
+      const totalScreened = matching.length;
+      const highRiskCount = matching.filter((r) => r.riskBand === 'HIGH_RISK').length;
+      const lowRiskCount = matching.filter((r) => r.riskBand === 'LOW_RISK').length;
+      const noRiskCount = matching.filter((r) => r.riskBand === 'NO_RISK').length;
+
+      const highRiskPct = totalScreened > 0 ? Math.round((highRiskCount / totalScreened) * 100) : 0;
+      const lowRiskPct = totalScreened > 0 ? Math.round((lowRiskCount / totalScreened) * 100) : 0;
+      const noRiskPct = totalScreened > 0 ? Math.round((noRiskCount / totalScreened) * 100) : 0;
+
+      const totalScoreSum = matching.reduce((sum, r) => sum + (r.totalScore || 0), 0);
+      const avgScore = totalScreened > 0 ? Number((totalScoreSum / totalScreened).toFixed(2)) : 0;
+
+      // Clean short label for Recharts axes
+      let shortName = camp.campName;
+      if (shortName.includes('Mehsana')) shortName = 'Mehsana Camp';
+      else if (shortName.includes('Ahmedabad')) shortName = 'Ahmedabad Camp';
+      else if (shortName.includes('Surat')) shortName = 'Surat Camp';
+      else if (shortName.length > 20) shortName = shortName.slice(0, 18) + '...';
+
+      let prevalenceTier: 'CRITICAL_HIGH' | 'MODERATE' | 'LOW' = 'LOW';
+      if (highRiskPct >= 28 || avgScore >= 2.5) {
+        prevalenceTier = 'CRITICAL_HIGH';
+      } else if (highRiskPct >= 15 || avgScore >= 1.5) {
+        prevalenceTier = 'MODERATE';
+      }
+
+      return {
+        ...camp,
+        shortName,
+        totalScreened,
+        highRiskCount,
+        lowRiskCount,
+        noRiskCount,
+        highRiskPct,
+        lowRiskPct,
+        noRiskPct,
+        avgScore,
+        prevalenceTier,
+      };
+    });
+
+    // Sort by high-risk rate and avg score descending to highlight oncology hotspots first
+    return metrics.sort((a, b) => b.highRiskPct - a.highRiskPct || b.avgScore - a.avgScore);
+  }, [camps, records]);
+
+  // Identify highest prevalence hotspot camp for oncologist attention
+  const highestRiskCamp = useMemo(() => {
+    return (
+      campPerformanceStats.find((c) => c.totalScreened > 0 && c.prevalenceTier === 'CRITICAL_HIGH') ||
+      campPerformanceStats.find((c) => c.totalScreened > 0) ||
+      campPerformanceStats[0]
+    );
+  }, [campPerformanceStats]);
+
+  // Filter records by selected medical camp first
+  const campFilteredRecords = useMemo(() => {
+    if (selectedCampId === 'ALL') return records;
+    const targetCamp = camps.find((c) => c.id === selectedCampId);
+    return records.filter(
+      (r) =>
+        r.campId === selectedCampId ||
+        (targetCamp && (r.campName === targetCamp.name || r.campLocation === targetCamp.location))
+    );
+  }, [records, selectedCampId, camps]);
+
+  // High-level summary metrics (scoped to selected camp)
+  const totalCount = campFilteredRecords.length;
+  const highRiskCount = useMemo(() => campFilteredRecords.filter((r) => r.riskBand === 'HIGH_RISK').length, [campFilteredRecords]);
+  const lowRiskCount = useMemo(() => campFilteredRecords.filter((r) => r.riskBand === 'LOW_RISK').length, [campFilteredRecords]);
+  const noRiskCount = useMemo(() => campFilteredRecords.filter((r) => r.riskBand === 'NO_RISK').length, [campFilteredRecords]);
 
   const highRiskPct = totalCount > 0 ? Math.round((highRiskCount / totalCount) * 100) : 0;
   const lowRiskPct = totalCount > 0 ? Math.round((lowRiskCount / totalCount) * 100) : 0;
   const noRiskPct = totalCount > 0 ? Math.round((noRiskCount / totalCount) * 100) : 0;
 
-  // Screening Trends over Time (grouped by date)
+  // Screening Trends over Time (grouped by date for selected camp)
   const trendData = useMemo(() => {
-    if (records.length === 0) return [];
+    if (campFilteredRecords.length === 0) return [];
 
     const map = new Map<
       string,
@@ -60,7 +205,7 @@ export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ record
     >();
 
     // Sort chronologically
-    const sorted = [...records].sort(
+    const sorted = [...campFilteredRecords].sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
@@ -92,7 +237,7 @@ export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ record
     });
 
     return Array.from(map.values());
-  }, [records]);
+  }, [campFilteredRecords]);
 
   // Cohort Risk Distribution for Donut Chart
   const riskDistribution = useMemo(() => {
@@ -105,16 +250,17 @@ export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ record
 
   // Filter records for table view
   const filteredRecords = useMemo(() => {
-    return records.filter((rec) => {
+    return campFilteredRecords.filter((rec) => {
       const matchesSearch =
         (rec.patientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (rec.patientId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (rec.campLocation || '').toLowerCase().includes(searchQuery.toLowerCase());
+        (rec.campLocation || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (rec.campName || '').toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesBand = selectedBand === 'ALL' || rec.riskBand === selectedBand;
       return matchesSearch && matchesBand;
     });
-  }, [records, searchQuery, selectedBand]);
+  }, [campFilteredRecords, searchQuery, selectedBand]);
 
   // Export to CSV
   const handleExportCsv = () => {
@@ -122,6 +268,7 @@ export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ record
 
     const headers = [
       'Record ID',
+      'Camp Name',
       'Patient ID',
       'Patient Name',
       'Age',
@@ -153,6 +300,7 @@ export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ record
 
       return [
         escapeCsv(r.id),
+        escapeCsv(r.campName || r.campLocation || 'Standard Camp'),
         escapeCsv(r.patientId || 'UNASSIGNED'),
         escapeCsv(r.patientName || 'Anonymous Participant'),
         escapeCsv(r.patientAge || ''),
@@ -183,9 +331,488 @@ export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ record
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-8">
-      {/* SUMMARY DASHBOARD WITH RECHARTS */}
-      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
+    <div className="w-full max-w-6xl mx-auto space-y-6">
+      {/* Top Header & Tab Switcher */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs uppercase font-bold tracking-wider text-emerald-600 dark:text-emerald-400">
+              Epidemiology & Triage Analytics
+            </span>
+            <span className="text-xs text-slate-400">·</span>
+            <span className="text-xs text-slate-500 font-mono">
+              {camps.length} Camps · {records.length} Screenings
+            </span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2.5 mt-0.5">
+            <TrendingUp className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+            Camp Risk Analytics & Audit Log
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Sub-Tab Navigation */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+            <button
+              onClick={() => setDashboardTab('performance')}
+              className={`px-3.5 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+                dashboardTab === 'performance'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <BarChart2 className="w-4 h-4 text-emerald-600" />
+              <span>Camp Performance ({campPerformanceStats.length})</span>
+            </button>
+
+            <button
+              onClick={() => setDashboardTab('log')}
+              className={`px-3.5 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+                dashboardTab === 'log'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <span>Screening Log ({campFilteredRecords.length})</span>
+            </button>
+          </div>
+
+          <button
+            onClick={handleExportCsv}
+            disabled={records.length === 0}
+            className="hidden sm:flex px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white rounded-xl transition-colors shadow-xs items-center gap-1.5 disabled:opacity-40"
+            title="Download complete dataset as CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV</span>
+          </button>
+        </div>
+      </div>
+
+      {/* DASHBOARD TAB 1: CAMP PERFORMANCE & PREVALENCE */}
+      {dashboardTab === 'performance' ? (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          {/* High-Prevalence Alert Banner for Oncologists */}
+          {highestRiskCamp && highestRiskCamp.totalScreened > 0 && (
+            <div className="p-5 bg-rose-50/80 dark:bg-rose-950/40 border-2 border-rose-300 dark:border-rose-900/60 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs uppercase font-bold tracking-wider text-rose-700 dark:text-rose-400">
+                      High-Prevalence Oncology Hotspot Alert
+                    </span>
+                    <span className="text-xs text-rose-400">·</span>
+                    <span className="text-xs font-semibold text-rose-700 dark:text-rose-300 font-mono">
+                      {highestRiskCamp.highRiskPct}% High-Risk Rate
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                    {highestRiskCamp.campName} ({highestRiskCamp.location})
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-3xl">
+                    Out of {highestRiskCamp.totalScreened} digitized screenings, {highestRiskCamp.highRiskCount} patients show severe cancer symptom scores (avg severity {highestRiskCamp.avgScore} / 13). Lead: {highestRiskCamp.doctorInCharge}. Immediate clinical biopsy mobilization recommended.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setSelectedCampId(highestRiskCamp.campId);
+                  setDashboardTab('log');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors shadow-xs flex items-center gap-2 shrink-0 self-end sm:self-center"
+              >
+                <span>View Patients ({highestRiskCamp.totalScreened})</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* 4 Summary Metric KPI Cards for Camp Performance */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-1">
+                <span>Camps Monitored</span>
+                <Building2 className="w-4 h-4 text-slate-400" />
+              </div>
+              <div className="text-2xl font-bold font-mono-tabular text-slate-900 dark:text-slate-100">
+                {campPerformanceStats.length}
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                {campPerformanceStats.filter((c) => c.totalScreened > 0).length} actively reporting
+              </div>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+              <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 text-xs font-semibold mb-1">
+                <span>High Prevalence Hotspots</span>
+                <Flame className="w-4 h-4 text-rose-500" />
+              </div>
+              <div className="text-2xl font-bold font-mono-tabular text-rose-600 dark:text-rose-400">
+                {campPerformanceStats.filter((c) => c.prevalenceTier === 'CRITICAL_HIGH').length}
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                Locations with &ge;28% high risk
+              </div>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-1">
+                <span>Cross-Camp Avg Score</span>
+                <Activity className="w-4 h-4 text-slate-400" />
+              </div>
+              <div className="text-2xl font-bold font-mono-tabular text-slate-900 dark:text-slate-100">
+                {(
+                  campPerformanceStats.reduce((acc, c) => acc + c.avgScore * c.totalScreened, 0) /
+                  (records.length || 1)
+                ).toFixed(2)}
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                Normal population &lt; 2.0
+              </div>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+              <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 text-xs font-semibold mb-1">
+                <span>High Risk Patients</span>
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="text-2xl font-bold font-mono-tabular text-amber-600 dark:text-amber-400">
+                {campPerformanceStats.reduce((acc, c) => acc + c.highRiskCount, 0)}
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                Urgent oncology workup
+              </div>
+            </div>
+          </div>
+
+          {/* Recharts Analytics: 2 Charts Side by Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Chart 1: Average Risk Score & Prevalence Index per Camp */}
+            <div className="lg:col-span-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                    <Target className="w-4 h-4 text-rose-600" />
+                    Average Risk Score per Camp
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Visualizing symptom severity index (0–13). Red threshold marks high-prevalence cancer locations.
+                  </p>
+                </div>
+                <span className="text-[11px] font-mono px-2 py-0.5 bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded">
+                  Alert &ge; 2.5
+                </span>
+              </div>
+
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={campPerformanceStats.filter((c) => c.totalScreened > 0)}
+                    margin={{ top: 20, right: 20, left: -15, bottom: 25 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.15} />
+                    <XAxis
+                      dataKey="shortName"
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickLine={false}
+                      interval={0}
+                      angle={-15}
+                      textAnchor="end"
+                    />
+                    <YAxis
+                      allowDecimals={true}
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickLine={false}
+                      domain={[0, 'auto']}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload as CampPerformanceMetric;
+                          return (
+                            <div className="bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 p-3 rounded-xl shadow-xl text-xs space-y-1.5 border border-slate-700">
+                              <div className="font-bold border-b border-slate-700 dark:border-slate-300 pb-1">
+                                {data.campName}
+                              </div>
+                              <div className="text-slate-300 dark:text-slate-600">
+                                Location: {data.location}
+                              </div>
+                              <div className="text-emerald-400 dark:text-emerald-600 font-semibold">
+                                Total Screened: {data.totalScreened}
+                              </div>
+                              <div className="text-rose-400 dark:text-rose-600 font-bold">
+                                Avg Risk Score: {data.avgScore} / 13 ({data.highRiskPct}% High Risk)
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                Lead: {data.doctorInCharge}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <ReferenceLine
+                      y={2.5}
+                      stroke="#e11d48"
+                      strokeDasharray="4 4"
+                      label={{
+                        value: 'High Prevalence Alert (2.5)',
+                        position: 'insideTopRight',
+                        fill: '#e11d48',
+                        fontSize: 10,
+                        fontWeight: 600,
+                      }}
+                    />
+                    <Bar dataKey="avgScore" radius={[6, 6, 0, 0]}>
+                      {campPerformanceStats
+                        .filter((c) => c.totalScreened > 0)
+                        .map((entry, idx) => (
+                          <Cell
+                            key={`bar-${idx}`}
+                            fill={
+                              entry.prevalenceTier === 'CRITICAL_HIGH'
+                                ? '#e11d48'
+                                : entry.prevalenceTier === 'MODERATE'
+                                ? '#f59e0b'
+                                : '#10b981'
+                            }
+                          />
+                        ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Chart 2: Risk Stratification Distribution per Camp (Stacked Bar) */}
+            <div className="lg:col-span-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-emerald-600" />
+                    Risk Band Distribution per Camp
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Cohort triage composition: High Risk vs Low Risk vs No Risk breakdown.
+                  </p>
+                </div>
+              </div>
+
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={campPerformanceStats.filter((c) => c.totalScreened > 0)}
+                    margin={{ top: 20, right: 20, left: -15, bottom: 25 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.15} />
+                    <XAxis
+                      dataKey="shortName"
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickLine={false}
+                      interval={0}
+                      angle={-15}
+                      textAnchor="end"
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload as CampPerformanceMetric;
+                          return (
+                            <div className="bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 p-3 rounded-xl shadow-xl text-xs space-y-1 border border-slate-700">
+                              <div className="font-bold border-b border-slate-700 dark:border-slate-300 pb-1">
+                                {data.campName} · {data.totalScreened} Screened
+                              </div>
+                              <div className="text-rose-400 dark:text-rose-600 font-medium">
+                                High Risk (Score &ge; 4): {data.highRiskCount} ({data.highRiskPct}%)
+                              </div>
+                              <div className="text-amber-400 dark:text-amber-600 font-medium">
+                                Low Risk (Score 1–3): {data.lowRiskCount} ({data.lowRiskPct}%)
+                              </div>
+                              <div className="text-emerald-400 dark:text-emerald-600 font-medium">
+                                No Risk (Score 0): {data.noRiskCount} ({data.noRiskPct}%)
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                    <Bar
+                      dataKey="highRiskCount"
+                      name="High Risk (Score ≥ 4)"
+                      stackId="a"
+                      fill="#e11d48"
+                      radius={[0, 0, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="lowRiskCount"
+                      name="Low Risk (Score 1–3)"
+                      stackId="a"
+                      fill="#f59e0b"
+                      radius={[0, 0, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="noRiskCount"
+                      name="No Risk (Score 0)"
+                      stackId="a"
+                      fill="#10b981"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Camp Performance Leaderboard & Action Table */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                  <Stethoscope className="w-4 h-4 text-emerald-600" />
+                  Camp Risk Prevalence Leaderboard
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Ranked by high-risk patient concentration to prioritize regional oncology biopsy and follow-up.
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 font-semibold text-slate-600 dark:text-slate-300">
+                    <th className="py-3 px-4 w-12 text-center font-mono">RANK</th>
+                    <th className="py-3 px-4">MEDICAL CAMP & VENUE</th>
+                    <th className="py-3 px-4">PREVALENCE STATUS</th>
+                    <th className="py-3 px-4 text-center font-mono">TOTAL SCREENED</th>
+                    <th className="py-3 px-4 text-center font-mono">AVG SCORE</th>
+                    <th className="py-3 px-4">RISK PROFILE</th>
+                    <th className="py-3 px-4 text-right">ACTION</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {campPerformanceStats.map((camp, index) => {
+                    return (
+                      <tr
+                        key={camp.campId}
+                        className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors"
+                      >
+                        <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-500">
+                          #{index + 1}
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                            {camp.campName}
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+                            <MapPin className="w-3 h-3 text-slate-400" />
+                            <span>{camp.location}</span>
+                            <span>·</span>
+                            <span>Lead: {camp.doctorInCharge}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          {camp.prevalenceTier === 'CRITICAL_HIGH' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
+                              <Flame className="w-3.5 h-3.5 text-rose-600" />
+                              High Prevalence Hotspot
+                            </span>
+                          ) : camp.prevalenceTier === 'MODERATE' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                              Moderate Prevalence
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Normal Distribution
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center font-mono-tabular font-bold text-sm text-slate-900 dark:text-slate-100">
+                          {camp.totalScreened}
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center font-mono-tabular font-bold text-sm text-slate-900 dark:text-slate-100">
+                          <span
+                            className={
+                              camp.avgScore >= 2.5
+                                ? 'text-rose-600 dark:text-rose-400'
+                                : camp.avgScore >= 1.5
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-emerald-600 dark:text-emerald-400'
+                            }
+                          >
+                            {camp.avgScore.toFixed(2)}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 min-w-[180px]">
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="font-semibold text-rose-600 dark:text-rose-400">
+                              {camp.highRiskPct}% ({camp.highRiskCount} patients)
+                            </span>
+                            <span className="text-slate-400 text-[10px]">
+                              {camp.lowRiskCount} low · {camp.noRiskCount} none
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                            <div
+                              style={{ width: `${camp.highRiskPct}%` }}
+                              className="bg-rose-600 h-full"
+                            />
+                            <div
+                              style={{ width: `${camp.lowRiskPct}%` }}
+                              className="bg-amber-500 h-full"
+                            />
+                            <div
+                              style={{ width: `${camp.noRiskPct}%` }}
+                              className="bg-emerald-500 h-full"
+                            />
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            onClick={() => {
+                              setSelectedCampId(camp.campId);
+                              setDashboardTab('log');
+                            }}
+                            className="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors inline-flex items-center gap-1.5"
+                          >
+                            <span>View Patients</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* DASHBOARD TAB 2: SCREENING AUDIT LOG & TIMELINE */
+        <div className="space-y-8 animate-in fade-in duration-150">
+          {/* SUMMARY DASHBOARD WITH RECHARTS */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
         {/* Header & Export CTA */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
           <div>
@@ -484,8 +1111,24 @@ export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ record
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          {/* Camp Filter Dropdown */}
+          {camps && camps.length > 0 && (
+            <select
+              value={selectedCampId}
+              onChange={(e) => setSelectedCampId(e.target.value)}
+              className="px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-400 font-medium"
+            >
+              <option value="ALL">All Camps ({camps.length})</option>
+              {camps.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.location})
+                </option>
+              ))}
+            </select>
+          )}
+
           {/* Search box */}
-          <div className="relative flex-1 sm:w-64">
+          <div className="relative flex-1 sm:w-60">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -595,7 +1238,14 @@ export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ record
                       </td>
 
                       <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
-                        {rec.campLocation || 'Clinical Camp'}
+                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                          {rec.campName || rec.campLocation || 'Clinical Camp'}
+                        </div>
+                        {rec.campName && rec.campLocation && rec.campName !== rec.campLocation && (
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {rec.campLocation}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-center font-mono-tabular font-bold text-sm text-slate-900 dark:text-slate-100">
@@ -642,6 +1292,8 @@ export const ScreeningHistoryLog: React.FC<ScreeningHistoryLogProps> = ({ record
           </div>
         )}
       </div>
+        </div>
+      )}
 
       {/* RECORD DETAILS MODAL */}
       {activeModalRecord && (
