@@ -1,0 +1,8 @@
+{
+  "name": "Camp Self-Screening Scan",
+  "description": "Standalone clinical paper-form scanning and oncology risk assessment platform using multimodal AI to interpret physical questionnaires by fixed question codes, with human review curtain and clinical scoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
