@@ -87,9 +87,14 @@ export interface ScanUsageLog {
   fileName: string;
   formType: string;
   isDuplicate: boolean;
-  tokenCountEstimate: number;
-  costInrEstimate: number; // Cost in Indian Rupee (₹)
-  costUsdEstimate?: number;
+  modelUsed?: string;
+  isLiveApi?: boolean;
+  promptTokens?: number;
+  candidatesTokens?: number;
+  tokenCountEstimate: number; // Total tokens
+  costInrEstimate: number; // Actual/calculated cost in INR (₹)
+  costUsdEstimate?: number; // Actual/calculated cost in USD ($)
+  costPaiseFormatted?: string; // e.g. "1.24 paise"
   status: 'SUCCESS' | 'FLAGGED_REVIEW' | 'FAILED';
 }
 
@@ -110,4 +115,16 @@ export interface RegisteredPatient {
   campLocation?: string;
   phone?: string;
   notes?: string;
+}
+
+export interface LearnedCorrection {
+  id: string;
+  code: string;
+  rowNumber: number;
+  originalAnswer: AnswerType;
+  correctedAnswer: AnswerType;
+  originalConfidence: number;
+  learnedReason?: string;
+  timestamp: string;
+  appliedCount: number;
 }
