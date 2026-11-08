@@ -128,3 +128,19 @@ export interface LearnedCorrection {
   timestamp: string;
   appliedCount: number;
 }
+
+export interface AppConfiguration {
+  monthlyBudgetInr: number; // Camp Monthly Budget & Quota Guard Amount in ₹ INR
+  usdToInrRate: number; // INR amount of 1 USD (Exchange Rate)
+  quotaWarningThresholdPct: number; // Warning trigger percentage, e.g. 80%
+  perScanThresholdMultiplier: number; // Multiplier threshold for per-scan estimate anomaly guard (default 5 for 5x)
+  lastUpdated: string;
+}
+
+export const DEFAULT_APP_CONFIGURATION: AppConfiguration = {
+  monthlyBudgetInr: 2100.0,
+  usdToInrRate: 86.50,
+  quotaWarningThresholdPct: 80,
+  perScanThresholdMultiplier: 5, // 5x threshold on per scan estimate
+  lastUpdated: '2026-01-01T00:00:00.000Z',
+};

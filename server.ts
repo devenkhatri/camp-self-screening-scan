@@ -190,30 +190,34 @@ Return ONLY a valid JSON object matching this schema:
         };
       });
 
-      return {
-        success: true,
-        modelUsed: fallbackReason ? 'gemini-3.8-flash-fallback' : 'gemini-3.8-flash-simulated',
-        results: simulatedResults,
-        detectedPatientId: 'CAMP-MEHSANA-4091',
-        detectedFormType: 'Onco Digital Gujarat 13-Question Form',
-        overallScanQuality: 'Acceptable',
-        usage: {
-          promptTokens: 1680,
-          candidatesTokens: 240,
-          totalTokens: 1920,
-          actualCostUsd: 0.000142,
-          actualCostInr: 0.0123,
-          actualCostPaise: '1.23 paise',
-          isExact: false,
-        },
-        estimatedCostUsd: 0.000142,
-        estimatedCostInr: 0.0123,
-        isSimulated: true,
-        notice: fallbackReason
-          ? `Vision AI timed out or reported notice: ${fallbackReason}. Loaded clean clinical baseline.`
-          : 'Simulated vision recognition active because GEMINI_API_KEY is not set.',
+        const activeUsdToInr = Number(req.body?.usdToInrRate) > 0 ? Number(req.body.usdToInrRate) : 86.50;
+        const fallbackCostInr = Number((0.000142 * activeUsdToInr).toFixed(4));
+        const fallbackCostPaise = `${(fallbackCostInr * 100).toFixed(2)} paise`;
+
+        return {
+          success: true,
+          modelUsed: fallbackReason ? 'gemini-3.8-flash-fallback' : 'gemini-3.8-flash-simulated',
+          results: simulatedResults,
+          detectedPatientId: 'CAMP-MEHSANA-4091',
+          detectedFormType: 'Onco Digital Gujarat 13-Question Form',
+          overallScanQuality: 'Acceptable',
+          usage: {
+            promptTokens: 1680,
+            candidatesTokens: 240,
+            totalTokens: 1920,
+            actualCostUsd: 0.000142,
+            actualCostInr: fallbackCostInr,
+            actualCostPaise: fallbackCostPaise,
+            isExact: false,
+          },
+          estimatedCostUsd: 0.000142,
+          estimatedCostInr: fallbackCostInr,
+          isSimulated: true,
+          notice: fallbackReason
+            ? `Vision AI timed out or reported notice: ${fallbackReason}. Loaded clean clinical baseline.`
+            : 'Simulated vision recognition active because GEMINI_API_KEY is not set.',
+        };
       };
-    };
 
     // If Gemini API Key is configured, make real call with timeout protection
     if (ai) {
@@ -286,9 +290,9 @@ Return ONLY a valid JSON object matching this schema:
         // Official Gemini 3.8 Flash Pricing:
         // Input: $0.075 per 1,000,000 tokens ($0.000000075 / token)
         // Output: $0.30 per 1,000,000 tokens ($0.00000030 / token)
-        // Exchange Rate: 1 USD = 86.50 INR
+        const activeUsdToInr = Number(req.body?.usdToInrRate) > 0 ? Number(req.body.usdToInrRate) : 86.50;
         const actualCostUsd = (promptTokens * 0.075 / 1000000) + (candidatesTokens * 0.30 / 1000000);
-        const actualCostInr = actualCostUsd * 86.50;
+        const actualCostInr = actualCostUsd * activeUsdToInr;
         const actualCostPaise = (actualCostInr * 100).toFixed(2); // e.g. "1.18 paise"
 
         res.json({

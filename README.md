@@ -74,6 +74,30 @@ Each scanned field in the **Pre-Save Review Curtain Modal** displays an unmistak
 - **Sticky Real-Time Triage Bottom Dock**: The calculated total score (`pts`), risk stratification badge (`HIGH_RISK`, `LOW_RISK`, `NO_RISK`), and "Confirm & Save" action are permanently anchored to the bottom with `safe-area-bottom` padding, updating dynamically as checkboxes are toggled.
 - **Mobile Result Cards for History Log**: Individual patient records in the Screening Log feature responsive mobile cards with touch-friendly triage badges, score counters, and audit detail viewers, avoiding horizontal table scroll issues on small screens.
 
+### 8. Camp Budget, Quota Guard & Exchange Rate Configuration
+- **Dynamic Financial Controls**: Dedicated "Config / Settings" management interface providing granular control over operational and financial variables:
+  - **Camp Monthly Budget & Quota Guard (₹ INR)**: Set spending caps (default ₹2,100 / month, configurable to any custom amount with quick presets for ₹1,000, ₹2,100, ₹5,000, ₹10,000, ₹25,000).
+  - **INR Exchange Rate per 1 USD ($)**: Real-time FX multiplier (default ₹86.50/USD, with presets from ₹84.50 to ₹88.00) used across both the client and Express server.
+  - **Quota Warning Threshold**: Configurable safety buffer (default 80%) to warn field teams before AI quotas are exhausted.
+  - **Per Scan Estimate 5x Anomaly Threshold Guard**:
+    - **Baseline Single Scan Cost**: Standard Gemini 3.8 Flash vision call consumes ~1,740 prompt tokens + ~260 output tokens = **~1.23 paise ($0.0001425)**.
+    - **5x Threshold Multiplier (Configurable)**: Automatically sets a ceiling of **5x (~6.16 paise / ₹0.0616)**. Scans that consume excess tokens (due to oversized images, multi-page questionnaires, or high visual noise) are immediately flagged with a `⚠️ >5x Spike` badge.
+    - **Configurable Multiplier in Settings**: Field administrators can tune the threshold multiplier with quick presets (`2x`, `3x`, `5x (Default)`, `8x`, `10x`) or enter any custom multiplier with live preview calculations.
+- **Immediate Application-Wide Recalculation**:
+  - Updating budget, exchange rate, or per-scan threshold in Settings instantly recalculates all historical scan logs, average cost calculations, lifetime expenses, and quota meters across the entire app.
+  - New scans transmit the active exchange rate to `/api/scan-form` so token costs are computed accurately server-side.
+- **Capacity & Unit Cost Estimator**:
+  - Live projection calculator displaying remaining scans possible within the current month's budget.
+  - Instant display of exact cost per 1,000 prompt/candidate tokens in Indian Rupee paise.
+
+### 9. Resilient PDF Generation & Print Engine (Resolved OKLCH Color Parsing)
+- **Direct PDF Export with OKLCH Color Sanitization**:
+  - Resolves `html2canvas` parser crash `Attempting to parse an unsupported color function "oklch"` caused by Tailwind CSS v4's default color palette.
+  - Features an `onclone` DOM sanitization pipeline in `PrintableFormModal` that strips modern CSS color functions (`oklch`, `lab`, `color()`) and resolves computed styles to standard safe sRGB via HTML5 Canvas 2D context before canvas rasterization.
+- **Dual Export Strategy**:
+  - Direct 1-click PDF download via client-side `jsPDF`.
+  - Built-in High-Fidelity Native Browser Print fallback optimized for A4 paper layout (`@media print` clean margins, crisp vector typography, and no-screen-chrome printing).
+
 ---
 
 ## Technical Stack & Execution
@@ -81,7 +105,7 @@ Each scanned field in the **Pre-Save Review Curtain Modal** displays an unmistak
 - **Frontend**: React 19, TypeScript, Tailwind CSS, Lucide Icons.
 - **Backend**: Express on Node.js running via `tsx server.ts` with Vite middleware in development.
 - **AI Service**: Google Gen AI SDK (`@google/genai`) using `gemini-3.8-flash`.
-- **Client Utilities**: `jsQR` for in-browser QR decoding, HTML5 Canvas for EXIF scrubbing and image sanitization.
+- **Client Utilities**: `jsQR` for in-browser QR decoding, `jsPDF` + sanitized `html2canvas` for printable A4 generation, HTML5 Canvas for EXIF scrubbing and image sanitization.
 - **Port**: Runs on port 3000.
 
 

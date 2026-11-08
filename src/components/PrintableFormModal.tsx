@@ -60,12 +60,58 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
     try {
       const element = printAreaRef.current;
 
-      // High-resolution canvas snapshot (2x retina scale for crisp print text)
+      // High-resolution canvas snapshot with full oklch color normalization for Tailwind CSS v4
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        onclone: (clonedDoc: Document, clonedElement: HTMLElement) => {
+          // 1. Sanitize any style tags in the cloned document that might contain modern oklch colors
+          clonedDoc.querySelectorAll('style').forEach((styleEl) => {
+            if (styleEl.textContent && /oklch|color\(|lab\(/.test(styleEl.textContent)) {
+              styleEl.textContent = styleEl.textContent.replace(/oklch\([^)]+\)/g, '#1e293b');
+            }
+          });
+
+          // 2. Resolve every computed color in clonedElement using canvas 2d context
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+
+          const toSafeRgb = (val: string, fallback: string = '#0f172a'): string => {
+            if (!tempCtx || !val) return fallback;
+            try {
+              tempCtx.fillStyle = '#000000';
+              tempCtx.fillStyle = val;
+              return tempCtx.fillStyle;
+            } catch {
+              return fallback;
+            }
+          };
+
+          const colorProps = [
+            'color',
+            'backgroundColor',
+            'borderTopColor',
+            'borderRightColor',
+            'borderBottomColor',
+            'borderLeftColor',
+            'outlineColor',
+            'textDecorationColor',
+          ];
+
+          const allNodes = [clonedElement, ...Array.from(clonedElement.querySelectorAll('*'))];
+          for (const node of allNodes) {
+            if (!(node instanceof HTMLElement)) continue;
+            const computed = window.getComputedStyle(node);
+            for (const prop of colorProps) {
+              const val = computed.getPropertyValue(prop);
+              if (val && /oklch|color\(|lab\(/.test(val)) {
+                node.style.setProperty(prop, toSafeRgb(val, prop.includes('background') ? '#ffffff' : '#0f172a'), 'important');
+              }
+            }
+          }
+        },
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -100,7 +146,8 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
       setDownloadSuccessNotice(`Downloaded ${fileName} successfully! Guaranteed 1-page print.`);
       setTimeout(() => setDownloadSuccessNotice(null), 6000);
     } catch (err: unknown) {
-      console.error('Failed to export PDF directly:', err);
+      console.warn('Direct PDF canvas snapshot fallback triggered:', err);
+      // Seamless browser print fallback if system canvas refuses rendering
       window.print();
     } finally {
       setIsGeneratingPdf(false);

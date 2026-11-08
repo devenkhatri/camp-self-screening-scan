@@ -6,6 +6,7 @@ import { QuestionBankAdmin } from './components/QuestionBankAdmin';
 import { ScreeningHistoryLog } from './components/ScreeningHistoryLog';
 import { PrintableFormModal } from './components/PrintableFormModal';
 import { UsageCostTracker } from './components/UsageCostTracker';
+import { AppSettingsConfig } from './components/AppSettingsConfig';
 import {
   ScreeningQuestion,
   ScreeningRecord,
@@ -13,6 +14,8 @@ import {
   ScannedAnswer,
   RegisteredPatient,
   MedicalCamp,
+  AppConfiguration,
+  DEFAULT_APP_CONFIGURATION,
 } from './types/screening';
 import {
   DEFAULT_SCREENING_QUESTIONS,
@@ -29,10 +32,29 @@ interface ToastMessage {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'scan' | 'history' | 'questions' | 'print' | 'usage'>('scan');
+  const [activeTab, setActiveTab] = useState<'scan' | 'history' | 'questions' | 'print' | 'usage' | 'settings'>('scan');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
+
+  // Financial & Operational Configuration State with LocalStorage persistence
+  const [config, setConfig] = useState<AppConfiguration>(() => {
+    try {
+      const saved = localStorage.getItem('paper_scan_app_config');
+      if (saved) {
+        return { ...DEFAULT_APP_CONFIGURATION, ...JSON.parse(saved) };
+      }
+    } catch {}
+    return DEFAULT_APP_CONFIGURATION;
+  });
+
+  const handleUpdateConfig = (newConfig: AppConfiguration) => {
+    setConfig(newConfig);
+    try {
+      localStorage.setItem('paper_scan_app_config', JSON.stringify(newConfig));
+    } catch {}
+    addToast('Configuration updated! Financial indicators recalculated.', 'success');
+  };
 
   // State with LocalStorage persistence
   const [questions, setQuestions] = useState<ScreeningQuestion[]>(() => {
@@ -260,6 +282,7 @@ export default function App() {
             onSelectActiveCamp={handleSelectActiveCamp}
             onSaveNewCamp={handleSaveNewCamp}
             onOpenCampAdmin={() => setActiveTab('questions')}
+            config={config}
           />
         )}
 
@@ -282,7 +305,22 @@ export default function App() {
 
         {activeTab === 'print' && <PrintableFormModal questions={questions} />}
 
-        {activeTab === 'usage' && <UsageCostTracker logs={usageLogs} />}
+        {activeTab === 'usage' && (
+          <UsageCostTracker
+            logs={usageLogs}
+            config={config}
+            onNavigateToSettings={() => setActiveTab('settings')}
+          />
+        )}
+
+        {activeTab === 'settings' && (
+          <AppSettingsConfig
+            config={config}
+            onUpdateConfig={handleUpdateConfig}
+            logs={usageLogs}
+            onNavigateToUsage={() => setActiveTab('usage')}
+          />
+        )}
       </main>
 
       {/* Footer */}

@@ -15,37 +15,62 @@ import {
   X,
   CheckCircle2,
   Cpu,
+  Settings,
+  ArrowRight,
+  AlertTriangle,
 } from 'lucide-react';
-import { ScanUsageLog } from '../types/screening';
+import { ScanUsageLog, AppConfiguration } from '../types/screening';
 
 interface UsageCostTrackerProps {
   logs: ScanUsageLog[];
+  config?: AppConfiguration;
+  onNavigateToSettings?: () => void;
 }
 
-export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({ logs }) => {
+export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({
+  logs,
+  config,
+  onNavigateToSettings,
+}) => {
   const [selectedLogForBreakdown, setSelectedLogForBreakdown] = useState<ScanUsageLog | null>(null);
+
+  const usdToInrRate = config?.usdToInrRate ?? 86.50;
+  const monthlyBudgetCapInr = config?.monthlyBudgetInr ?? 2100.0;
+  const quotaWarningThresholdPct = config?.quotaWarningThresholdPct ?? 80;
+  const perScanThresholdMultiplier = config?.perScanThresholdMultiplier ?? 5;
+
+  // Single scan baseline estimate calculation (1,740 prompt + 260 candidate tokens)
+  const baselineSingleScanUsd = (1740 * 0.075) / 1000000 + (260 * 0.30) / 1000000; // ~$0.0001425 USD
+  const baselineSingleScanInr = baselineSingleScanUsd * usdToInrRate;
+  const baselineSingleScanPaise = (baselineSingleScanInr * 100).toFixed(2);
+
+  // Per scan threshold (e.g. 5x limit)
+  const perScanThresholdInr = baselineSingleScanInr * perScanThresholdMultiplier;
+  const perScanThresholdPaise = (perScanThresholdInr * 100).toFixed(2);
 
   // Aggregate statistics
   const totalScans = logs.length;
   const duplicateInterceptedCount = logs.filter((l) => l.isDuplicate).length;
   const flaggedForReviewCount = logs.filter((l) => l.status === 'FLAGGED_REVIEW').length;
+  const scansOverThresholdCount = logs.filter(
+    (l) => (l.costInrEstimate || (l.costUsdEstimate ? l.costUsdEstimate * usdToInrRate : 0.0125)) > perScanThresholdInr
+  ).length;
 
-  const totalCostInr = logs.reduce(
-    (sum, l) => sum + (l.costInrEstimate || (l.costUsdEstimate ? l.costUsdEstimate * 86.5 : 0.0125)),
+  const totalCostUsd = logs.reduce(
+    (sum, l) => sum + (l.costUsdEstimate || (l.costInrEstimate ? l.costInrEstimate / usdToInrRate : 0.000145)),
     0
   );
 
-  const totalCostUsd = logs.reduce(
-    (sum, l) => sum + (l.costUsdEstimate || (l.costInrEstimate ? l.costInrEstimate / 86.5 : 0.000145)),
+  const totalCostInr = logs.reduce(
+    (sum, l) => sum + (l.costInrEstimate || (l.costUsdEstimate ? l.costUsdEstimate * usdToInrRate : 0.0125)),
     0
   );
 
   const totalTokens = logs.reduce((sum, l) => sum + (l.tokenCountEstimate || 2000), 0);
-  const avgCostInr = totalScans > 0 ? totalCostInr / totalScans : 0.0125;
+  const avgCostInr = totalScans > 0 ? totalCostInr / totalScans : (0.0001425 * usdToInrRate);
   const avgCostPaise = (avgCostInr * 100).toFixed(2);
 
   // Camp Monthly Cap Configuration in Indian Rupee
-  const monthlyBudgetCapInr = 2100.0; // ₹2,100 allows ~170,000 scans
   const budgetUsedPct = Math.min(100, Math.round((totalCostInr / monthlyBudgetCapInr) * 100));
 
   return (
@@ -62,9 +87,23 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({ logs }) => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Gemini 3.8 Flash Multimodal Live Telemetry</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {onNavigateToSettings && (
+            <button
+              type="button"
+              onClick={onNavigateToSettings}
+              className="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Configure Camp Monthly Budget and USD/INR Exchange Rate"
+            >
+              <Settings className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Configure Budget & Rates</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Gemini 3.8 Flash Live Telemetry</span>
+          </div>
         </div>
       </div>
 
@@ -99,6 +138,12 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({ logs }) => {
           <div className="text-[11px] text-emerald-700 dark:text-emerald-300 font-medium flex items-center justify-between">
             <span>Avg ~{avgCostPaise} paise / scan</span>
             <span className="text-slate-400">(${totalCostUsd.toFixed(5)})</span>
+          </div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400 pt-1 flex items-center justify-between border-t border-emerald-200/50 dark:border-emerald-800/50">
+            <span>Per-Scan {perScanThresholdMultiplier}x Limit:</span>
+            <span className="font-mono font-semibold text-amber-600 dark:text-amber-400">
+              ~{perScanThresholdPaise}p (₹{perScanThresholdInr.toFixed(4)})
+            </span>
           </div>
         </div>
 
@@ -148,10 +193,20 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({ logs }) => {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs font-mono">
-            <span className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300">
-              1 USD = ₹86.50 INR
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+            <span className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 font-semibold">
+              1 USD = ₹{usdToInrRate.toFixed(2)} INR
             </span>
+            {onNavigateToSettings && (
+              <button
+                type="button"
+                onClick={onNavigateToSettings}
+                className="text-[11px] font-sans text-emerald-600 dark:text-emerald-400 hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+              >
+                <span>Edit in Settings</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -180,16 +235,37 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({ logs }) => {
             </p>
           </div>
 
-          <div className="p-3 bg-white dark:bg-slate-800 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl space-y-1 bg-emerald-50/40 dark:bg-emerald-950/20">
-            <span className="text-[11px] text-emerald-800 dark:text-emerald-300 block font-semibold uppercase">
-              3. Actual Cost per Patient Form
-            </span>
-            <div className="text-base font-bold font-mono-tabular text-emerald-700 dark:text-emerald-400">
-              ~₹0.0125 (1.25 paise) / scan
+          <div className="p-3 bg-white dark:bg-slate-800 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl space-y-1.5 bg-emerald-50/40 dark:bg-emerald-950/20">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-emerald-800 dark:text-emerald-300 block font-semibold uppercase">
+                3. Per Scan Estimate & {perScanThresholdMultiplier}x Cap
+              </span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                {perScanThresholdMultiplier}x Threshold
+              </span>
             </div>
-            <p className="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium">
-              ₹1.00 INR digitizes over 80 physical clinical screening sheets!
-            </p>
+            <div className="flex items-baseline justify-between">
+              <div className="text-base font-bold font-mono-tabular text-emerald-700 dark:text-emerald-400">
+                ~{baselineSingleScanPaise}p
+                <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400 ml-1">
+                  (₹{baselineSingleScanInr.toFixed(4)})
+                </span>
+              </div>
+              <div className="text-xs font-mono font-bold text-amber-700 dark:text-amber-400">
+                Max ~{perScanThresholdPaise}p
+              </div>
+            </div>
+            <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5 pt-0.5 border-t border-emerald-200/60 dark:border-emerald-800/60">
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="text-slate-500">Threshold Guard Ceiling:</span>
+                <span className="font-mono font-bold text-amber-700 dark:text-amber-300">
+                  ₹{perScanThresholdInr.toFixed(4)} / form
+                </span>
+              </div>
+              <p className="text-[10px] text-emerald-800 dark:text-emerald-300 font-medium">
+                Scans exceeding {perScanThresholdMultiplier}x are flagged in the telemetry log.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -223,19 +299,30 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({ logs }) => {
 
       {/* Recent Scan Execution Log with Actual AI Cost Breakdown */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Recent Scans Execution Log & Actual AI Cost ({logs.length})
             </h3>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Click any scan to inspect the exact token calculation and cost formula breakdown.
+              Click any scan to inspect the exact token calculation, cost formula breakdown, and {perScanThresholdMultiplier}x threshold guard check.
             </p>
           </div>
 
-          <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-            Real Billed Telemetry
-          </span>
+          <div className="flex items-center gap-2">
+            {scansOverThresholdCount > 0 ? (
+              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                ⚠️ {scansOverThresholdCount} Scan(s) &gt; {perScanThresholdMultiplier}x Threshold
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                ✓ All scans within {perScanThresholdMultiplier}x ceiling (~{perScanThresholdPaise}p)
+              </span>
+            )}
+            <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold hidden md:inline">
+              Real Billed Telemetry
+            </span>
+          </div>
         </div>
 
         {logs.length === 0 ? (
@@ -262,7 +349,7 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({ logs }) => {
                   const candTok = log.candidatesTokens || 260;
                   const totalTok = log.tokenCountEstimate || promptTok + candTok;
                   const costInr = log.costInrEstimate || 0.0125;
-                  const costUsd = log.costUsdEstimate || costInr / 86.5;
+                  const costUsd = log.costUsdEstimate || (costInr / usdToInrRate);
                   const paiseStr = log.costPaiseFormatted || `${(costInr * 100).toFixed(2)} paise`;
 
                   return (
@@ -310,6 +397,17 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({ logs }) => {
                           </span>
                           <span className="text-[10px] text-slate-400">(${costUsd.toFixed(5)})</span>
                         </div>
+                        {costInr > perScanThresholdInr ? (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                              ⚠️ &gt;{perScanThresholdMultiplier}x Spike ({(costInr / (baselineSingleScanInr || 0.0123)).toFixed(1)}x)
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="mt-0.5 text-[9px] text-slate-400">
+                            Within {perScanThresholdMultiplier}x cap
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3 px-4 text-center">
@@ -436,11 +534,51 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({ logs }) => {
                   <span className="font-semibold text-slate-800 dark:text-slate-200 block">
                     USD to INR Conversion Rate
                   </span>
-                  <span className="text-[11px] text-slate-500">Live community camp benchmark</span>
+                  <span className="text-[11px] text-slate-500">Configured in System Settings</span>
                 </div>
                 <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                  1 USD = ₹86.50 INR
+                  1 USD = ₹{usdToInrRate.toFixed(2)} INR
                 </span>
+              </div>
+
+              {/* Per-Scan 5x Threshold Audit Check */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-2 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                    Per-Scan {perScanThresholdMultiplier}x Threshold Audit Check
+                  </span>
+                  {(selectedLogForBreakdown.costInrEstimate || 0.0125) > perScanThresholdInr ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                      ⚠️ Exceeded {perScanThresholdMultiplier}x Threshold
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                      ✓ Safe (Within {perScanThresholdMultiplier}x Bound)
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-[11px] pt-1">
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">Baseline Estimate</span>
+                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                      ~{baselineSingleScanPaise}p
+                    </span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">{perScanThresholdMultiplier}x Ceiling Cap</span>
+                    <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                      ~{perScanThresholdPaise}p
+                    </span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">This Scan Cost</span>
+                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                      {selectedLogForBreakdown.costPaiseFormatted || `${(((selectedLogForBreakdown.costInrEstimate || 0.0125) * 100)).toFixed(2)}p`}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 

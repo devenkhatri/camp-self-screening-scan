@@ -30,6 +30,7 @@ import {
 import { sanitizeAndResizeImage } from '../utils/imageProcessing';
 import { getLearnedCorrections, applyLearnedMemoryToAnswers } from '../utils/activeLearning';
 import { CampSessionBar } from './CampSessionBar';
+import { AppConfiguration } from '../types/screening';
 
 interface ScannerUploadProps {
   questions: ScreeningQuestion[];
@@ -54,6 +55,7 @@ interface ScannerUploadProps {
   onSelectActiveCamp: (campId: string) => void;
   onSaveNewCamp: (camp: Omit<MedicalCamp, 'id' | 'createdAt'>) => void;
   onOpenCampAdmin: () => void;
+  config?: AppConfiguration;
 }
 
 interface PendingInspection {
@@ -105,6 +107,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
   onSelectActiveCamp,
   onSaveNewCamp,
   onOpenCampAdmin,
+  config,
 }) => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -174,6 +177,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
           questions: questions.filter((q) => q.isActive),
           targetPage: 2,
           learnedCorrections,
+          usdToInrRate: config?.usdToInrRate || 86.50,
         }),
       });
 

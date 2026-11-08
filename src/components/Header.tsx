@@ -1,9 +1,9 @@
 import React from 'react';
-import { ScanLine, FileSpreadsheet, ShieldAlert, Printer, BarChart3, Sun, Moon } from 'lucide-react';
+import { ScanLine, FileSpreadsheet, ShieldAlert, Printer, BarChart3, Settings, Sun, Moon } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: 'scan' | 'history' | 'questions' | 'print' | 'usage';
-  setActiveTab: (tab: 'scan' | 'history' | 'questions' | 'print' | 'usage') => void;
+  activeTab: 'scan' | 'history' | 'questions' | 'print' | 'usage' | 'settings';
+  setActiveTab: (tab: 'scan' | 'history' | 'questions' | 'print' | 'usage' | 'settings') => void;
   onNewScanClick: () => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -42,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </button>
 
-            {/* Zone 2: Desktop 5 Nav links */}
+            {/* Zone 2: Desktop Nav links */}
             <nav className="hidden md:flex items-center gap-1 sm:gap-2 text-sm font-medium">
               <button
                 onClick={() => setActiveTab('scan')}
@@ -102,6 +102,18 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <BarChart3 className="w-4 h-4" />
                 Estimates & Usage
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`px-3 py-2 rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                  activeTab === 'settings'
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              >
+                <Settings className="w-4 h-4" />
+                Settings
               </button>
             </nav>
 
@@ -183,14 +195,26 @@ export const Header: React.FC<HeaderProps> = ({
 
         <button
           onClick={() => setActiveTab('usage')}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[10px] font-medium transition-colors ${
+          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-lg text-[10px] font-medium transition-colors ${
             activeTab === 'usage'
               ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
           }`}
         >
           <BarChart3 className="w-4 h-4 mb-0.5" />
-          <span>Estimates</span>
+          <span>Usage</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-lg text-[10px] font-medium transition-colors ${
+            activeTab === 'settings'
+              ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+          }`}
+        >
+          <Settings className="w-4 h-4 mb-0.5" />
+          <span>Config</span>
         </button>
       </nav>
     </>
