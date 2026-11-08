@@ -7,11 +7,13 @@ An oncology-focused web application engineered for community cancer detection ca
 ## Key Capabilities
 
 ### 1. Optical Multimodal AI Form Reading (Gemini 3.8 Flash Vision)
-- **Multi-Color Ink Support (Red Pen / Triage Marker)**: Explicitly optimized for red ballpoint, red gel pen, red marker, blue, black, and pencil graphite. Red checkmarks (✓) and ticks (frequently used by clinical triage screeners to flag positive oncology symptoms) are recognized with high priority.
-- **Specific Row 5 Auditing (Que-5 Hoarseness / Vocal Cord Symptom)**: Targeted optical recognition for Row 5 (`Que-5: સ્વર પેટીનું કેન્સર - અવાજમાં ફેરફાર > 3 weeks`), accurately attributing red ticks in the YES (હા/4) or NO (ના/0) columns.
+- **Multi-Color Ink & Solid Color Fill Support (Red / Blue / Black / Digital)**: Explicitly optimized for solid filled squares, colored boxes, red swatches `[■]`, red ballpoint, gel pen, marker, pencil, and digital highlights. Solid red box fills in the YES (હા) column are recognized with >= 98% confidence.
+- **Physical Mark Primacy**: Honors visual marks present on the paper without overriding physically filled YES boxes based on demographic or gender assumptions.
+- **Empty Row Differentiation**: Correctly differentiates between checked boxes and completely blank rows (where both NO and YES boxes are empty outlines `[ ]`), classifying them as standard negative triage baseline.
+- **Specific Row 5 Auditing (Que-5 Hoarseness / Vocal Cord Symptom)**: Targeted optical recognition for Row 5 (`Que-5: સ્વર પેટીનું કેન્સર - અવાજમાં ફેરફાર > 3 weeks`), accurately attributing red marks in the YES (હા/4) or NO (ના/0) columns.
 - **Row Boundary Isolation & Parallax Protection**: Evaluates checkmark origins at horizontal row borders to prevent long mark tails from bleeding into adjacent questions.
-- **Flexible Marking Styles**: Detects standard ticks (✓), crosses (X), circled printed digits (e.g. circling '0' in the *ના* column or '1'/'4' in the *હા* column), solid dots, and filled boxes.
-- **Gender-Aware Context**: Automatically classifies inapplicable gender-specific rows (Que-9 Prostate for females, Que-10 Breast & Que-11 Cervix for males) as negative (`no`) when left blank, preventing false uncertainty flags.
+- **Flexible Marking Styles**: Detects standard ticks (✓), crosses (X), circled printed digits (e.g. circling '0' in the *ના* column or '1'/'4' in the *હા* column), solid dots, and solid filled squares.
+- **1-Page & 2-Page Document Agnostic**: Intelligently parses single-page A4 test sheets (Page 1) and full 2-page camp brochures (Page 2 table).
 
 ### 2. Visual Color-Coded Confidence Scores in Review Curtain
 Each scanned field in the **Pre-Save Review Curtain Modal** displays an unmistakable, color-coded visual confidence indicator and mini progress meter:
@@ -27,8 +29,8 @@ Each scanned field in the **Pre-Save Review Curtain Modal** displays an unmistak
 
 ### 4. Resilient Low-Latency Architecture
 - **Prompt-Driven JSON Streaming**: Streamlined from heavy nested response schemas down to prompt-driven JSON (`responseMimeType: 'application/json'`), achieving 5–10s response latency.
-- **Cloud Run Gateway Timeout Guard**: Enforces a 16-second timeout race on the server so requests never hit Cloud Run's 30-second gateway limit.
-- **Defensive Error Handling**: Guarantees valid JSON HTTP 200 responses with clinical triage fallbacks, eliminating `Unexpected token '<'` syntax crashes.
+- **Cloud Run 27-Second Gateway Timeout Protection**: Extended from 16s to 27s to handle high-resolution image uploads and multi-page PDFs without premature fallback aborts.
+- **Defensive Error Handling**: Guarantees valid JSON HTTP 200 responses with transparent clinical notices when offline or in diagnostic fallback mode, eliminating misleading notes.
 
 ### 5. Medical Camp Roster & Registration
 - Integrated camp session manager with live patient roster matching.

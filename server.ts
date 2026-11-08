@@ -104,59 +104,57 @@ async function startServer() {
 
     // Advanced clinical prompt with strict row isolation, mark style rules, and spatial anchoring
     const promptText = `
-You are an expert clinical form reader specialized in physical paper cancer self-screening questionnaires.
-Analyze this photo or PDF of a filled cancer screening form with highest optical precision.
+You are an expert clinical form reader specialized in physical paper and digital cancer self-screening questionnaires.
+Analyze this photo, scan, or PDF of a cancer screening form with highest optical precision.
 
 QUESTION SPECIFICATIONS FOR THIS FORM:
 ${questionListText}
 ${learnedFeedbackText}
 
 PAGE & LAYOUT DETECTION:
-1. If this is a multi-page PDF or brochure (e.g., Onco Digital / Harikrishna Cancer Foundation 2-page Gujarati screening brochure):
-   - Page 1 is the cancer awareness cover / informational brochure.
-   - Page 2 contains the actual 13-row clinical questionnaire table with columns:
-     Col 1: ક્રમ (Serial No 1 to 13)
-     Col 2: પ્રશ્નો (Questions / Clinical Symptoms)
-     Col 3: ના (NO with score 0)
-     Col 4: હા (YES with score 1 or 4)
-   - Focus exclusively on the questionnaire table on Page 2 (or the filled table area of the photo).
+1. Document Layout:
+   - The form may be a single-page document (1-page A4 form / PDF / photo) or a 2-page brochure.
+   - For 1-page forms, the 13-question table is on Page 1.
+   - For 2-page brochures, the 13-question table is on Page 2 (with Page 1 being the awareness cover).
+   - Locate the 13-row clinical table wherever it appears and read rows 1 through 13.
+   - The table has two checkbox columns on the right side:
+     * Column 3 (Left checkbox): NO / ના (0)
+     * Column 4 (Right checkbox): YES / હા (1 or 4)
 
-ROW BOUNDARY ISOLATION & PARALLAX PROTECTION (CRITICAL):
-2. Inspect the horizontal grid lines between each row (Row 1 through Row 13).
-   - Attribute marks STRICTLY to the row inside whose horizontal borders the main stroke/dot/circle lies.
-   - Warning: Do NOT let a long checkmark tail extending from Row N into the space below cause Row N+1 to be falsely classified. Look at the vertex/origin of the mark.
-   - Read each row sequentially from 1 to 13, cross-referencing row numbers and question codes.
-
-MARK RECOGNITION & INK COLOR RULES (CRITICAL):
-3. INK COLOR & PEN SUPPORT (RED PEN / RED INK SUPPORT):
-   - In oncology screening camps, doctors, triage nurses, examiners, and patients frequently use a **RED BALLPOINT PEN, RED GEL PEN, RED SKETCH PEN, OR RED MARKER** to mark physical forms.
-   - You MUST actively look for and recognize **RED INK** markings with equal or higher priority as blue or black ink!
-   - A **RED TICK (✓)**, red checkmark, red cross (X), red circled number ('0', '1', '4'), or red strike is an authoritative, primary mark! NEVER ignore, discount, or misinterpret red ink markings as stamp borders or background colors.
-   - Blue ink, black ink, pencil graphite, and green ink are also fully recognized.
-4. Patients may indicate their choice using multiple valid marking methods:
-   - Checkmark / Tick (✓ or ✔) in black, blue, or RED ink.
-   - Cross / X mark (✗ or X).
-   - Circled printed number: Common where patients circle '0' in the 'ના' column, or '1'/'4' in the 'હા' column.
-   - Filled box, solid dot (•), or horizontal strike (—).
-5. Corrections & Cross-outs:
-   - If a mark was made in one column and scribbled over or crossed out, and another mark is placed in the opposite column, classify according to the intentional, non-scribbled mark.
-6. Column Determination:
-   - 'yes': Clear mark, tick, or circle in the YES / 'હા' / '1' or '4' column.
-   - 'no': Clear mark, tick, or circle in the NO / 'ના' / '0' column.
-   - 'unclear': Only if both columns are marked without correction, or if a mark is an ambiguous smudge directly on the dividing border between ના and હા.
-7. Gender-Specific Inapplicable Questions:
-   - Row 9 (Que-9): Prostate ('પ્રોસ્ટેટ કેન્સર - પુરુષ માટે') applies to MEN only.
-   - Row 10 (Que-10): Breast ('સ્તન કેન્સર - મહિલાઓ માટે') applies to WOMEN.
-   - Row 11 (Que-11): Cervix ('ગર્ભાશય/સર્વિક્સ - મહિલાઓ માટે') applies to WOMEN.
-   - If a patient leaves an inapplicable question blank due to gender, or strikes through it, classify as 'no' (0.95 confidence) and state in notes: "Inapplicable due to patient gender / left blank".
+CRITICAL: MARK RECOGNITION & SOLID COLOR FILL SUPPORT (RED PEN / RED FILL / DIGITAL HIGHLIGHTS):
+2. SOLID FILLED BOXES, COLOR BLOCKS & RECTANGLES (CRITICAL):
+   - In digital PDF forms, tablet entries, and physical clinical sheets, screeners frequently fill or color the ENTIRE box with a **SOLID RED SQUARE / SOLID RED RECTANGLE / RED COLOR FILL [■]**!
+   - A box filled with solid red (or blue, black, green) color is an EXPLICIT, INTENTIONAL, 100% HIGH-CONFIDENCE MARK!
+   - If the YES box (Column 4, right box) contains a solid red square/fill [■] and the NO box (Column 3, left box) is an empty white outline [ ], this is DEFINITIVELY "yes" (confidence >= 0.98)! Notes must state: "Solid red filled square in YES (હા) column".
+   - If the NO box contains a fill/mark and YES is empty, it is DEFINITIVELY "no".
+3. TRADITIONAL PEN & MARKER STYLES:
+   - In addition to solid fills, recognize all standard marking styles:
+     * Checkmark / Tick (✓ or ✔) in RED, blue, black, or pencil.
+     * Cross / X mark (✗ or X).
+     * Circled printed digits (circling '0' in the 'ના' column or '1'/'4' in the 'હા' column).
+     * Solid dot (•), bullet, or horizontal strike (—).
+4. EMPTY ROWS (NO MARKS IN EITHER COLUMN):
+   - If NEITHER the NO box nor the YES box is marked (both boxes are empty white outlines [ ] with no ink/color fill, as seen on blank/unselected rows):
+     * Classify as 'no' (negative symptom baseline).
+     * Set confidence to 0.95.
+     * Note in notes: "Row left blank; both NO and YES boxes are empty white squares".
+5. VISUAL MARK PRIMACY OVER DEMOGRAPHICS (CRITICAL):
+   - ALWAYS respect the physical mark visually visible on the form!
+   - If a row's YES box is filled with a red square or marked (even on gender-specific rows like Que-9 Prostate for a female, or Que-10 Breast / Que-11 Cervix for a male), you MUST CLASSIFY AS 'yes'!
+   - Do NOT override a physically filled YES box to 'no' based on gender assumptions. Report the visual reality of the form!
+   - Only treat gender-specific rows as 'no' if the row is LEFT BLANK or crossed out.
+6. CORRECTIONS & OVERWRITES:
+   - If one box was marked and scribbled over/crossed out and the other box is marked cleanly, classify by the clean, non-scribbled mark.
 
 OUTPUT SPECIFICATION:
 For each row, provide:
 - code: e.g. "Que-1"
 - rowNumber: 1 to 13
 - answer: "yes" | "no" | "unclear"
-- confidence: 0.0 to 1.0 (assign >= 0.90 for clear marks, <= 0.55 if truly ambiguous)
-- notes: Precise visual description of what was detected (e.g. "Checkmark in NO column (ના/0)", "Circled digit 4 in YES column", "Left blank (treated as NO)")
+- confidence: 0.0 to 1.0 (assign >= 0.95 for clear fills, ticks, or empty white pairs; <= 0.55 if truly ambiguous)
+- notes: Precise visual description of what was detected (e.g. "Solid red filled square in YES (હા/1) column", "Checkmark in NO (ના/0) column", "Row left blank (both boxes empty)")
+
+Extract the Patient ID or Name from the header if visible (e.g., from Name: "Ramilaben 10Yes" or QR: "CAMP-MH-8519").
 
 Return ONLY a valid JSON object matching this schema:
 {
@@ -165,8 +163,8 @@ Return ONLY a valid JSON object matching this schema:
       "code": "Que-1",
       "rowNumber": 1,
       "answer": "yes" | "no" | "unclear",
-      "confidence": 0.95,
-      "notes": "Clear mark in NO column"
+      "confidence": 0.98,
+      "notes": "Solid red filled square in YES (હા) column"
     }
   ],
   "detectedPatientId": "string or null",
@@ -178,15 +176,16 @@ Return ONLY a valid JSON object matching this schema:
 
     // Clinical simulator helper for fallback or offline operation
     const generateClinicalFallback = (fallbackReason?: string) => {
-      // If simulated fallback triggers, default to a neutral, clean all-NO baseline
-      // so users are not surprised by artificial YES or UNCLEAR on test forms
+      // Diagnostic fallback for offline or network timeout
       const simulatedResults = questions.map((q: { code: string; rowNumber: number; scoreYes: number }) => {
         return {
           code: q.code,
           rowNumber: q.rowNumber,
           answer: 'no' as const,
-          confidence: 0.94,
-          notes: 'Standard pen mark detected in NO / ના column',
+          confidence: 0.50,
+          notes: fallbackReason
+            ? `Offline / network fallback (${fallbackReason.slice(0, 50)}). Human review needed.`
+            : 'Simulated vision recognition active. Human review recommended.',
         };
       });
 
@@ -214,7 +213,7 @@ Return ONLY a valid JSON object matching this schema:
           estimatedCostInr: fallbackCostInr,
           isSimulated: true,
           notice: fallbackReason
-            ? `Vision AI timed out or reported notice: ${fallbackReason}. Loaded clean clinical baseline.`
+            ? `Vision AI reported notice: ${fallbackReason}. Human review recommended.`
             : 'Simulated vision recognition active because GEMINI_API_KEY is not set.',
         };
       };
@@ -224,9 +223,9 @@ Return ONLY a valid JSON object matching this schema:
       try {
         const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
-        // 16-second timeout race to beat Cloud Run's 30s gateway timeout
+        // 27-second timeout race to allow high-res multi-page processing while staying within Cloud Run limits
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini API call timed out after 16 seconds')), 16000)
+          setTimeout(() => reject(new Error('Gemini API call timed out after 27 seconds')), 27000)
         );
 
         const generatePromise = ai.models.generateContent({
