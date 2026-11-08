@@ -94,7 +94,7 @@ async function startServer() {
     // Build human clinical correction feedback for active learning
     const learnedFeedbackText =
       Array.isArray(learnedCorrections) && learnedCorrections.length > 0
-        ? `\nACTIVE LEARNING · PRIOR HUMAN CLINICAL VERIFICATIONS:\n${learnedCorrections
+        ? `\n## 9. ACTIVE LEARNING CLINICAL VERIFICATIONS FROM PRIOR SCREENINGS:\nHuman screeners previously verified the following rows on this questionnaire version:\n${learnedCorrections
             .map(
               (c: any) =>
                 `- Row ${c.rowNumber} (${c.code}): Human reviewer previously verified as '${String(c.correctedAnswer).toUpperCase()}'. ${c.learnedReason || ''}`
@@ -102,76 +102,28 @@ async function startServer() {
             .join('\n')}\nPay special visual attention to these specific rows as past human screeners have made adjustments here!`
         : '';
 
-    // Advanced clinical prompt with strict row isolation, mark style rules, and spatial anchoring
-    const promptText = `
+    // Load full enhanced clinical specifications from prompt-reference.md at project root
+    let promptReferenceText = '';
+    const promptRefPath = path.resolve(__dirname, 'prompt-reference.md');
+    try {
+      if (fs.existsSync(promptRefPath)) {
+        promptReferenceText = fs.readFileSync(promptRefPath, 'utf-8');
+      }
+    } catch (e) {
+      console.warn('Could not read prompt-reference.md from disk:', e);
+    }
+
+    // Compose prompt using prompt-reference.md with dynamic active learning memory
+    const promptText = promptReferenceText
+      ? `${promptReferenceText}\n${learnedFeedbackText}`
+      : `
 You are an expert clinical form reader specialized in physical paper and digital cancer self-screening questionnaires.
 Analyze this photo, scan, or PDF of a cancer screening form with highest optical precision.
 
-QUESTION SPECIFICATIONS FOR THIS FORM:
-${questionListText}
+FORM SPECIFICATION: FORM-VER-2026.04 (CANCER SELF-SCREENING QUESTIONNAIRE)
 ${learnedFeedbackText}
 
-PAGE & LAYOUT DETECTION:
-1. Document Layout:
-   - The form may be a single-page document (1-page A4 form / PDF / photo) or a 2-page brochure.
-   - For 1-page forms, the 13-question table is on Page 1.
-   - For 2-page brochures, the 13-question table is on Page 2 (with Page 1 being the awareness cover).
-   - Locate the 13-row clinical table wherever it appears and read rows 1 through 13.
-   - The table has two checkbox columns on the right side:
-     * Column 3 (Left checkbox): NO / ના (0)
-     * Column 4 (Right checkbox): YES / હા (1 or 4)
-
-CRITICAL: MARK RECOGNITION & SOLID COLOR FILL SUPPORT (RED PEN / RED FILL / DIGITAL HIGHLIGHTS):
-2. SOLID FILLED BOXES, COLOR BLOCKS & RECTANGLES (CRITICAL):
-   - In digital PDF forms, tablet entries, and physical clinical sheets, screeners frequently fill or color the ENTIRE box with a **SOLID RED SQUARE / SOLID RED RECTANGLE / RED COLOR FILL [■]**!
-   - A box filled with solid red (or blue, black, green) color is an EXPLICIT, INTENTIONAL, 100% HIGH-CONFIDENCE MARK!
-   - If the YES box (Column 4, right box) contains a solid red square/fill [■] and the NO box (Column 3, left box) is an empty white outline [ ], this is DEFINITIVELY "yes" (confidence >= 0.98)! Notes must state: "Solid red filled square in YES (હા) column".
-   - If the NO box contains a fill/mark and YES is empty, it is DEFINITIVELY "no".
-3. TRADITIONAL PEN & MARKER STYLES:
-   - In addition to solid fills, recognize all standard marking styles:
-     * Checkmark / Tick (✓ or ✔) in RED, blue, black, or pencil.
-     * Cross / X mark (✗ or X).
-     * Circled printed digits (circling '0' in the 'ના' column or '1'/'4' in the 'હા' column).
-     * Solid dot (•), bullet, or horizontal strike (—).
-4. EMPTY ROWS (NO MARKS IN EITHER COLUMN):
-   - If NEITHER the NO box nor the YES box is marked (both boxes are empty white outlines [ ] with no ink/color fill, as seen on blank/unselected rows):
-     * Classify as 'no' (negative symptom baseline).
-     * Set confidence to 0.95.
-     * Note in notes: "Row left blank; both NO and YES boxes are empty white squares".
-5. VISUAL MARK PRIMACY OVER DEMOGRAPHICS (CRITICAL):
-   - ALWAYS respect the physical mark visually visible on the form!
-   - If a row's YES box is filled with a red square or marked (even on gender-specific rows like Que-9 Prostate for a female, or Que-10 Breast / Que-11 Cervix for a male), you MUST CLASSIFY AS 'yes'!
-   - Do NOT override a physically filled YES box to 'no' based on gender assumptions. Report the visual reality of the form!
-   - Only treat gender-specific rows as 'no' if the row is LEFT BLANK or crossed out.
-6. CORRECTIONS & OVERWRITES:
-   - If one box was marked and scribbled over/crossed out and the other box is marked cleanly, classify by the clean, non-scribbled mark.
-
-OUTPUT SPECIFICATION:
-For each row, provide:
-- code: e.g. "Que-1"
-- rowNumber: 1 to 13
-- answer: "yes" | "no" | "unclear"
-- confidence: 0.0 to 1.0 (assign >= 0.95 for clear fills, ticks, or empty white pairs; <= 0.55 if truly ambiguous)
-- notes: Precise visual description of what was detected (e.g. "Solid red filled square in YES (હા/1) column", "Checkmark in NO (ના/0) column", "Row left blank (both boxes empty)")
-
-Extract the Patient ID or Name from the header if visible (e.g., from Name: "Ramilaben 10Yes" or QR: "CAMP-MH-8519").
-
-Return ONLY a valid JSON object matching this schema:
-{
-  "results": [
-    {
-      "code": "Que-1",
-      "rowNumber": 1,
-      "answer": "yes" | "no" | "unclear",
-      "confidence": 0.98,
-      "notes": "Solid red filled square in YES (હા) column"
-    }
-  ],
-  "detectedPatientId": "string or null",
-  "detectedFormType": "Onco Digital Gujarat 13-Question Form",
-  "overallScanQuality": "Good" | "Acceptable" | "Poor",
-  "notes": "Summary of observations"
-}
+Return ONLY a valid JSON object matching the schema with form_valid, camp_code, respondent, answers, quality.
 `;
 
     // Clinical simulator helper for fallback or offline operation
@@ -182,6 +134,7 @@ Return ONLY a valid JSON object matching this schema:
           code: q.code,
           rowNumber: q.rowNumber,
           answer: 'no' as const,
+          rawAnswer: 'NO',
           confidence: 0.50,
           notes: fallbackReason
             ? `Offline / network fallback (${fallbackReason.slice(0, 50)}). Human review needed.`
@@ -189,43 +142,101 @@ Return ONLY a valid JSON object matching this schema:
         };
       });
 
-        const activeUsdToInr = Number(req.body?.usdToInrRate) > 0 ? Number(req.body.usdToInrRate) : 86.50;
-        const fallbackCostInr = Number((0.000142 * activeUsdToInr).toFixed(4));
-        const fallbackCostPaise = `${(fallbackCostInr * 100).toFixed(2)} paise`;
+      const activeUsdToInr = Number(req.body?.usdToInrRate) > 0 ? Number(req.body.usdToInrRate) : 86.50;
+      const fallbackCostInr = Number((0.000142 * activeUsdToInr).toFixed(4));
+      const fallbackCostPaise = `${(fallbackCostInr * 100).toFixed(2)} paise`;
 
-        return {
-          success: true,
-          modelUsed: fallbackReason ? 'gemini-3.8-flash-fallback' : 'gemini-3.8-flash-simulated',
-          results: simulatedResults,
-          detectedPatientId: 'CAMP-MEHSANA-4091',
-          detectedFormType: 'Onco Digital Gujarat 13-Question Form',
-          overallScanQuality: 'Acceptable',
-          usage: {
-            promptTokens: 1680,
-            candidatesTokens: 240,
-            totalTokens: 1920,
-            actualCostUsd: 0.000142,
-            actualCostInr: fallbackCostInr,
-            actualCostPaise: fallbackCostPaise,
-            isExact: false,
+      return {
+        success: true,
+        modelUsed: fallbackReason ? 'Clinical Vision Engine (Fallback)' : 'Clinical Vision Engine (Simulated)',
+        results: simulatedResults,
+        answers: simulatedResults.map((r: { code: string; notes?: string }) => ({
+          code: r.code,
+          question_text_short: 'Clinical screening question',
+          applies_to: 'all',
+          answer: 'NO',
+          no_box: 'unmarked',
+          yes_box: 'unmarked',
+          mark_type: 'none',
+          written_text: null,
+          confidence: 'medium',
+          needs_review: true,
+          notes: r.notes || '',
+        })),
+        summary: {
+          question_count: simulatedResults.length,
+          yes_count: 0,
+          no_count: simulatedResults.length,
+          blank_count: 0,
+          both_count: 0,
+          unclear_count: 0,
+          not_applicable_count: 0,
+          yes_codes: [],
+          form_pattern: 'all_no_marked',
+        },
+        formValid: true,
+        formInvalidReason: null,
+        formVersionSeen: 'FORM-VER-2026.04',
+        campCode: 'CAMP-MH-8519',
+        respondent: {
+          name: 'Ramilaben 10Yes',
+          name_transliterated: null,
+          age: null,
+          gender: 'Female',
+          gender_raw: 'Female',
+          phone: null,
+          phone_raw: '1010101010',
+          phone_digit_count: 10,
+          phone_is_valid_indian_mobile: false,
+          date_raw: '10-Jan',
+          day: 10,
+          month: 1,
+          year: null,
+          camp_location: 'Mehsana',
+          field_confidence: {
+            name: 'high',
+            age: 'low',
+            gender: 'high',
+            phone: 'high',
+            date_and_location: 'high',
           },
-          estimatedCostUsd: 0.000142,
-          estimatedCostInr: fallbackCostInr,
-          isSimulated: true,
-          notice: fallbackReason
-            ? `Vision AI reported notice: ${fallbackReason}. Human review recommended.`
-            : 'Simulated vision recognition active because GEMINI_API_KEY is not set.',
-        };
+          field_issues: [],
+        },
+        quality: {
+          overall_confidence: 'medium',
+          issues: fallbackReason ? [fallbackReason] : ['Simulated vision offline fallback'],
+          needs_human_review: true,
+          review_reasons: ['Simulated offline verification mode active'],
+        },
+        detectedPatientId: 'CAMP-MH-8519',
+        detectedFormType: 'FORM-VER-2026.04 Cancer Self-Screening Questionnaire',
+        overallScanQuality: 'Acceptable',
+        usage: {
+          promptTokens: 1680,
+          candidatesTokens: 240,
+          totalTokens: 1920,
+          actualCostUsd: 0.000142,
+          actualCostInr: fallbackCostInr,
+          actualCostPaise: fallbackCostPaise,
+          isExact: false,
+        },
+        estimatedCostUsd: 0.000142,
+        estimatedCostInr: fallbackCostInr,
+        isSimulated: true,
+        notice: fallbackReason
+          ? `Vision AI reported notice: ${fallbackReason}. Human review recommended.`
+          : 'Simulated vision recognition active because GEMINI_API_KEY is not set.',
       };
+    };
 
     // If Gemini API Key is configured, make real call with timeout protection
     if (ai) {
       try {
         const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
-        // 27-second timeout race to allow high-res multi-page processing while staying within Cloud Run limits
+        // 45-second timeout race to allow high-res multi-page processing while staying within Cloud Run limits
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini API call timed out after 27 seconds')), 27000)
+          setTimeout(() => reject(new Error('Gemini API call timed out after 45 seconds')), 45000)
         );
 
         const generatePromise = ai.models.generateContent({
@@ -264,22 +275,104 @@ Return ONLY a valid JSON object matching this schema:
           }
         }
 
-        // Normalize and ensure all requested questions are mapped
-        const recognizedResults = (parsed.results || []).map((item: { code: string; rowNumber?: number; answer: string; confidence: number; notes?: string }) => {
+        // Support both parsed.answers (prompt-reference.md standard) and parsed.results (legacy fallback)
+        const rawItems: any[] = Array.isArray(parsed.answers)
+          ? parsed.answers
+          : Array.isArray(parsed.results)
+          ? parsed.results
+          : [];
+
+        // Normalize and map to client-side ScannedAnswer models
+        const recognizedResults = rawItems.map((item: any, idx: number) => {
+          const code = item.code || `Que-${idx + 1}`;
+          const codeDigits = parseInt(String(code).replace(/\D/g, ''), 10);
+          const rowNumber = item.rowNumber ?? (isNaN(codeDigits) ? idx + 1 : codeDigits);
+
+          // Decision mapping per prompt-reference.md:
+          // "YES" -> 'yes'
+          // "NO", "BLANK", "NOT_APPLICABLE" -> 'no'
+          // "BOTH", "UNCLEAR" -> 'unclear'
           let ans: 'yes' | 'no' | 'unclear' = 'unclear';
-          const lower = (item.answer || '').toLowerCase();
-          if (lower === 'yes' || lower === 'ha' || lower === '1' || lower === '4') ans = 'yes';
-          else if (lower === 'no' || lower === 'na' || lower === '0') ans = 'no';
-          else ans = 'unclear';
+          const upperAns = String(item.answer || '').toUpperCase().trim();
+          if (upperAns === 'YES' || upperAns === 'HA' || upperAns === '1' || upperAns === '4') {
+            ans = 'yes';
+          } else if (
+            upperAns === 'NO' ||
+            upperAns === 'NA' ||
+            upperAns === '0' ||
+            upperAns === 'BLANK' ||
+            upperAns === 'NOT_APPLICABLE'
+          ) {
+            ans = 'no';
+          } else if (upperAns === 'BOTH' || upperAns === 'UNCLEAR') {
+            ans = 'unclear';
+          } else {
+            const lower = upperAns.toLowerCase();
+            if (lower === 'yes') ans = 'yes';
+            else if (lower === 'no') ans = 'no';
+            else ans = 'unclear';
+          }
+
+          // Map confidence: "high" -> 0.98, "medium" -> 0.72, "low" -> 0.45, or numeric
+          let conf = 0.85;
+          if (typeof item.confidence === 'string') {
+            const cLower = item.confidence.toLowerCase();
+            if (cLower === 'high') conf = 0.98;
+            else if (cLower === 'medium') conf = 0.72;
+            else if (cLower === 'low') conf = 0.45;
+          } else if (typeof item.confidence === 'number') {
+            conf = Math.max(0, Math.min(1, item.confidence));
+          }
+
+          // If flagged for review or marked ambiguous, ensure confidence reflects need for inspection
+          if (item.needs_review && conf > 0.65) {
+            conf = 0.62;
+          }
+
+          // Comprehensive clinical notes
+          const noteParts: string[] = [];
+          if (item.notes) noteParts.push(item.notes);
+          if (item.mark_type && item.mark_type !== 'none') {
+            noteParts.push(`Mark: ${item.mark_type} (YES: ${item.yes_box || 'unmarked'}, NO: ${item.no_box || 'unmarked'})`);
+          }
+          if (item.written_text) {
+            noteParts.push(`Written text: "${item.written_text}"`);
+          }
+          if (upperAns === 'NOT_APPLICABLE') {
+            noteParts.push('Gender-inapplicable question left blank (negative baseline).');
+          } else if (upperAns === 'BLANK') {
+            noteParts.push('Question left blank by respondent.');
+          }
 
           return {
-            code: item.code,
-            rowNumber: item.rowNumber,
+            code,
+            rowNumber,
             answer: ans,
-            confidence: Math.max(0, Math.min(1, Number(item.confidence) || 0.5)),
-            notes: item.notes || '',
+            rawAnswer: item.answer || upperAns,
+            confidence: conf,
+            notes: noteParts.join(' | ') || (ans === 'yes' ? 'Marked affirmative' : 'Marked negative or blank'),
+            noBox: item.no_box,
+            yesBox: item.yes_box,
+            markType: item.mark_type,
+            writtenText: item.written_text,
+            needsReview: Boolean(item.needs_review),
+            questionTextShort: item.question_text_short || undefined,
+            appliesTo: item.applies_to || 'all',
           };
         });
+
+        // Patient ID / QR resolution from prompt-reference extraction
+        const detectedPatientId =
+          parsed.camp_code ||
+          parsed.respondent?.phone ||
+          parsed.respondent?.name ||
+          parsed.detectedPatientId ||
+          null;
+
+        const scanQuality =
+          typeof parsed.quality?.overall_confidence === 'string'
+            ? parsed.quality.overall_confidence.charAt(0).toUpperCase() + parsed.quality.overall_confidence.slice(1)
+            : parsed.overallScanQuality || 'Good';
 
         // Extract ACTUAL token usage from Gemini 3.8 Flash response
         const promptTokens = response.usageMetadata?.promptTokenCount ?? 1740;
@@ -296,11 +389,19 @@ Return ONLY a valid JSON object matching this schema:
 
         res.json({
           success: true,
-          modelUsed: 'gemini-3.8-flash',
+          modelUsed: 'Clinical Vision Engine',
           results: recognizedResults,
-          detectedPatientId: parsed.detectedPatientId || null,
-          detectedFormType: parsed.detectedFormType || 'Physical Paper Questionnaire',
-          overallScanQuality: parsed.overallScanQuality || 'Good',
+          answers: parsed.answers || undefined,
+          summary: parsed.summary || null,
+          formValid: parsed.form_valid ?? true,
+          formInvalidReason: parsed.form_invalid_reason || null,
+          formVersionSeen: parsed.form_version_seen || null,
+          campCode: parsed.camp_code || null,
+          respondent: parsed.respondent || null,
+          quality: parsed.quality || null,
+          detectedPatientId,
+          detectedFormType: parsed.form_version_seen || parsed.detectedFormType || 'Cancer Self-Screening Questionnaire',
+          overallScanQuality: scanQuality,
           usage: {
             promptTokens,
             candidatesTokens,

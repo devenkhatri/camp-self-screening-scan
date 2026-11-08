@@ -21,6 +21,15 @@ import {
 } from 'lucide-react';
 import { ScanUsageLog, AppConfiguration } from '../types/screening';
 
+const getEngineDisplayName = (model?: string) => {
+  if (!model) return 'Clinical Vision Engine';
+  const lower = model.toLowerCase();
+  if (lower.includes('simulated')) return 'Clinical Vision (Simulated)';
+  if (lower.includes('fallback')) return 'Clinical Vision (Fallback)';
+  if (lower.includes('gemini') || lower.includes('flash')) return 'Clinical Vision Engine';
+  return model;
+};
+
 interface UsageCostTrackerProps {
   logs: ScanUsageLog[];
   config?: AppConfiguration;
@@ -102,7 +111,7 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({
 
           <div className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Gemini 3.8 Flash Live Telemetry</span>
+            <span>Clinical Vision Live Telemetry</span>
           </div>
         </div>
       </div>
@@ -185,7 +194,7 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                Official Google Gemini 3.8 Flash Cost Formula
+                Official Multimodal Vision Cost Formula
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Exact multimodal API rates applied to physical document and questionnaire scanning:
@@ -336,7 +345,7 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({
                 <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 font-semibold text-slate-600 dark:text-slate-300">
                   <th className="py-3 px-4">TIMESTAMP</th>
                   <th className="py-3 px-4">DOCUMENT / FILE</th>
-                  <th className="py-3 px-4">MODEL & MODE</th>
+                  <th className="py-3 px-4">ENGINE & MODE</th>
                   <th className="py-3 px-4 text-center font-mono">TOKENS (IN / OUT)</th>
                   <th className="py-3 px-4 text-center font-mono">ACTUAL AI COST</th>
                   <th className="py-3 px-4 text-center">CERTAINTY</th>
@@ -370,7 +379,7 @@ export const UsageCostTracker: React.FC<UsageCostTrackerProps> = ({
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                           <Sparkles className="w-3 h-3 text-emerald-600" />
-                          <span>{log.modelUsed || 'gemini-3.8-flash'}</span>
+                          <span>{getEngineDisplayName(log.modelUsed)}</span>
                         </span>
                         {log.isLiveApi && (
                           <span className="ml-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">

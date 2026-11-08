@@ -51,7 +51,7 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
     setPatientId(`CAMP-MH-${Math.floor(1000 + Math.random() * 9000)}`);
   };
 
-  // Direct client-side A4 PDF generation and download (guaranteed 1 single page)
+  // Direct client-side A4 PDF generation and download (full page width, clean 5mm margins, zero content squeezing)
   const handleDownloadPdf = async () => {
     if (!printAreaRef.current) return;
     setIsGeneratingPdf(true);
@@ -60,61 +60,88 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
     try {
       const element = printAreaRef.current;
 
-      // High-resolution canvas snapshot with full oklch color normalization for Tailwind CSS v4
+      // High-resolution canvas snapshot with full A4-proportional width (980px) and fixed window dimensions
+      // to prevent mobile viewport squeezing and ensure wide, legible question columns
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        windowWidth: 1200,
+        windowHeight: 1600,
+        width: 980,
         onclone: (clonedDoc: Document, clonedElement: HTMLElement) => {
-          // 1. Sanitize any style tags in the cloned document that might contain modern oklch colors
+          // 1. Remove all external stylesheets that contain oklch to prevent html2canvas parser crashes
+          clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach((link) => link.remove());
           clonedDoc.querySelectorAll('style').forEach((styleEl) => {
             if (styleEl.textContent && /oklch|color\(|lab\(/.test(styleEl.textContent)) {
-              styleEl.textContent = styleEl.textContent.replace(/oklch\([^)]+\)/g, '#1e293b');
+              styleEl.remove();
             }
           });
 
-          // 2. Resolve every computed color in clonedElement using canvas 2d context
-          const tempCanvas = document.createElement('canvas');
-          const tempCtx = tempCanvas.getContext('2d');
-
-          const toSafeRgb = (val: string, fallback: string = '#0f172a'): string => {
-            if (!tempCtx || !val) return fallback;
-            try {
-              tempCtx.fillStyle = '#000000';
-              tempCtx.fillStyle = val;
-              return tempCtx.fillStyle;
-            } catch {
-              return fallback;
+          // 2. Inject clean, borderless standard CSS rules with full 980px width
+          const safeStyle = clonedDoc.createElement('style');
+          safeStyle.textContent = `
+            * { box-sizing: border-box; }
+            body {
+              background: #ffffff !important;
+              color: #0f172a !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
             }
-          };
+            .print-single-page {
+              width: 980px !important;
+              max-width: 980px !important;
+              min-width: 980px !important;
+              border: none !important;
+              box-shadow: none !important;
+              border-radius: 0 !important;
+              background: #ffffff !important;
+              padding: 6px 10px !important;
+              margin: 0 !important;
+            }
+            table {
+              width: 100% !important;
+              border-collapse: collapse !important;
+            }
+            th, td {
+              border: 1px solid #cbd5e1 !important;
+            }
+          `;
+          clonedDoc.head.appendChild(safeStyle);
 
-          const colorProps = [
-            'color',
-            'backgroundColor',
-            'borderTopColor',
-            'borderRightColor',
-            'borderBottomColor',
-            'borderLeftColor',
-            'outlineColor',
-            'textDecorationColor',
-          ];
+          // 3. Remove outer borders and set wide 980px canvas baseline so text columns never wrap excessively
+          clonedElement.style.width = '980px';
+          clonedElement.style.maxWidth = '980px';
+          clonedElement.style.minWidth = '980px';
+          clonedElement.style.border = 'none';
+          clonedElement.style.outline = 'none';
+          clonedElement.style.boxShadow = 'none';
+          clonedElement.style.borderRadius = '0';
+          clonedElement.style.backgroundColor = '#ffffff';
+          clonedElement.style.padding = '6px 10px';
+          clonedElement.style.margin = '0';
 
+          // 4. Sanitize any remaining inline oklch colors on elements
           const allNodes = [clonedElement, ...Array.from(clonedElement.querySelectorAll('*'))];
           for (const node of allNodes) {
             if (!(node instanceof HTMLElement)) continue;
-            const computed = window.getComputedStyle(node);
-            for (const prop of colorProps) {
-              const val = computed.getPropertyValue(prop);
-              if (val && /oklch|color\(|lab\(/.test(val)) {
-                node.style.setProperty(prop, toSafeRgb(val, prop.includes('background') ? '#ffffff' : '#0f172a'), 'important');
-              }
+            const inlineStyle = node.getAttribute('style') || '';
+            if (/oklch|color\(|lab\(/.test(inlineStyle)) {
+              node.setAttribute(
+                'style',
+                inlineStyle
+                  .replace(/oklch\([^)]+\)/g, '#0f172a')
+                  .replace(/color\([^)]+\)/g, '#0f172a')
+                  .replace(/lab\([^)]+\)/g, '#0f172a')
+              );
             }
           }
         },
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -123,31 +150,40 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
 
       const pdfWidth = 210; // A4 standard width in mm
       const pdfHeight = 297; // A4 standard height in mm
-      const margin = 8;
-      const printableWidth = pdfWidth - margin * 2;
-      const printableHeight = pdfHeight - margin * 2;
+      const marginX = 5; // Minimal 5mm margin on left and right (full 200mm horizontal span)
+      const printableWidth = pdfWidth - marginX * 2; // 200mm of active clinical table width
+      const marginY = 5; // Minimal 5mm margin on top and bottom
+      const printableHeight = pdfHeight - marginY * 2; // 287mm
 
-      const imgWidth = printableWidth;
-      const imgHeight = (canvas.height * printableWidth) / canvas.width;
+      // Precise aspect ratio calculations
+      const canvasAspect = canvas.height / canvas.width;
+      let drawWidth = printableWidth; // Full 200mm width across page
+      let drawHeight = printableWidth * canvasAspect;
+      let drawX = marginX; // Exactly 5mm left margin
+      let drawY = marginY; // 5mm top margin
 
-      // Ensure 100% single page placement
-      if (imgHeight <= printableHeight) {
-        pdf.addImage(imgData, 'JPEG', margin, margin, imgWidth, imgHeight);
+      if (drawHeight > printableHeight) {
+        // If content height exceeds single page, scale proportionally to fit 1 page cleanly
+        const scale = printableHeight / drawHeight;
+        drawWidth = drawWidth * scale;
+        drawHeight = printableHeight;
+        drawX = (pdfWidth - drawWidth) / 2;
+        drawY = marginY;
       } else {
-        const scale = printableHeight / imgHeight;
-        const scaledWidth = imgWidth * scale;
-        const offsetX = margin + (printableWidth - scaledWidth) / 2;
-        pdf.addImage(imgData, 'JPEG', offsetX, margin, scaledWidth, printableHeight);
+        // Fits comfortably within single page: retain full 200mm width with natural top offset
+        const remainingSpace = printableHeight - drawHeight;
+        drawY = marginY + Math.min(6, remainingSpace / 4);
       }
+
+      pdf.addImage(imgData, 'JPEG', drawX, drawY, drawWidth, drawHeight);
 
       const fileName = `Cancer_Screening_Form_1Page_${patientId || 'A4'}.pdf`;
       pdf.save(fileName);
 
-      setDownloadSuccessNotice(`Downloaded ${fileName} successfully! Guaranteed 1-page print.`);
+      setDownloadSuccessNotice(`Downloaded ${fileName} successfully! Full-width form layout with zero squeezing.`);
       setTimeout(() => setDownloadSuccessNotice(null), 6000);
     } catch (err: unknown) {
-      console.warn('Direct PDF canvas snapshot fallback triggered:', err);
-      // Seamless browser print fallback if system canvas refuses rendering
+      console.error('Direct PDF export error:', err);
       window.print();
     } finally {
       setIsGeneratingPdf(false);
@@ -160,11 +196,11 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6">
-      {/* Strict 1-Page Print Stylesheet */}
+      {/* Strict 1-Page Print Stylesheet with zero margins on sides and absolute positioning */}
       <style>{`
         @page {
           size: A4 portrait;
-          margin: 6mm 8mm;
+          margin: 5mm 6mm;
         }
         @media print {
           html, body {
@@ -172,24 +208,47 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
+            background-color: #ffffff !important;
             color: #000000 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          .no-print {
+          header, nav, footer, .no-print, [role="navigation"] {
             display: none !important;
+            visibility: hidden !important;
+          }
+          main {
+            margin: 0 !important;
+            padding: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            background: #ffffff !important;
+          }
+          /* Bulletproof print isolation: hide all surrounding page elements */
+          body * {
+            visibility: hidden;
+          }
+          .print-single-page, .print-single-page * {
+            visibility: visible;
           }
           .print-single-page {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
+            border-radius: 0 !important;
             box-shadow: none !important;
+            background: #ffffff !important;
+            color: #000000 !important;
             page-break-after: avoid !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            max-height: 285mm !important;
+            max-height: 287mm !important;
             overflow: hidden !important;
           }
         }
@@ -311,7 +370,7 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
       {/* The Printable Paper Sheet (Captured by html2canvas into PDF - 1 Page Strict) */}
       <div
         ref={printAreaRef}
-        className="print-single-page bg-white text-slate-900 p-5 sm:p-6 rounded-xl border border-slate-300 shadow-lg max-w-[820px] mx-auto print:border-none print:shadow-none print:p-0 print:m-0"
+        className="print-single-page bg-white text-slate-900 p-4 sm:p-5 rounded-xl border border-slate-300 shadow-lg max-w-[980px] w-full mx-auto print:border-none print:shadow-none print:rounded-none print:p-0 print:m-0 print:max-w-none print:w-full"
       >
         {/* Printable Header (Compact 1-Page Layout) */}
         <div className="border-b-2 border-slate-900 pb-2 mb-2">
@@ -385,7 +444,7 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
             <thead>
               <tr className="bg-slate-200 border-b border-slate-300 font-bold text-slate-900 text-[10px]">
                 <th className="py-1 px-2 w-14 text-center font-mono">CODE</th>
-                <th className="py-1 px-2">QUESTION / CLINICAL SCREENING SYMPTOM</th>
+                <th className="py-1 px-3">QUESTION / CLINICAL SCREENING SYMPTOM</th>
                 <th className="py-1 px-2 w-20 text-center border-l border-slate-300">
                   NO<br />
                   <span className="font-gujarati font-normal text-[10px]">ના (0)</span>
@@ -402,7 +461,7 @@ export const PrintableFormModal: React.FC<PrintableFormModalProps> = ({ question
                   <td className="py-1 px-1.5 text-center font-mono font-bold text-[10px] text-slate-900 border-r border-slate-200">
                     {q.code}
                   </td>
-                  <td className="py-1 px-2 text-slate-800 leading-tight">
+                  <td className="py-1 px-3 text-slate-800 leading-tight">
                     {printLanguage === 'bilingual' && (
                       <div>
                         <div className="font-gujarati font-medium text-slate-950 text-[11px] leading-tight mb-0.5">

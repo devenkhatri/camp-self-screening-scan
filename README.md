@@ -1,12 +1,12 @@
 # AI Multimodal Physical Paper Cancer Screening & Triage Scanner
 
-An oncology-focused web application engineered for community cancer detection camps (Harikrishna Cancer Foundation / Onco Digital). The platform digitizes physical paper questionnaires and 2-page brochures with high-speed multimodal AI (Gemini 3.8 Flash Vision), providing real-time optical mark recognition, human-in-the-loop verification, and active learning memory.
+An oncology-focused web application engineered for community cancer detection camps (Harikrishna Cancer Foundation / Onco Digital). The platform digitizes physical paper questionnaires and 2-page brochures with high-speed multimodal vision AI, providing real-time optical mark recognition, human-in-the-loop verification, and active learning memory.
 
 ---
 
 ## Key Capabilities
 
-### 1. Optical Multimodal AI Form Reading (Gemini 3.8 Flash Vision)
+### 1. Optical Multimodal AI Form Reading (Clinical Vision Engine)
 - **Multi-Color Ink & Solid Color Fill Support (Red / Blue / Black / Digital)**: Explicitly optimized for solid filled squares, colored boxes, red swatches `[■]`, red ballpoint, gel pen, marker, pencil, and digital highlights. Solid red box fills in the YES (હા) column are recognized with >= 98% confidence.
 - **Physical Mark Primacy**: Honors visual marks present on the paper without overriding physically filled YES boxes based on demographic or gender assumptions.
 - **Empty Row Differentiation**: Correctly differentiates between checked boxes and completely blank rows (where both NO and YES boxes are empty outlines `[ ]`), classifying them as standard negative triage baseline.
@@ -61,8 +61,8 @@ Each scanned field in the **Pre-Save Review Curtain Modal** displays an unmistak
 ---
 
 ### 6. Live Token Usage & Actual AI Cost Transparency
-- **Real-Time Token Usage Accounting**: Extracts `promptTokens`, `candidatesTokens`, and `totalTokens` directly from Gemini API response metadata (`usageMetadata`).
-- **Official Model Pricing Formula**: Applies Gemini 3.8 Flash benchmark pricing:
+- **Real-Time Token Usage Accounting**: Extracts `promptTokens`, `candidatesTokens`, and `totalTokens` directly from multimodal vision API response metadata (`usageMetadata`).
+- **Official Model Pricing Formula**: Applies standard multimodal vision benchmark pricing:
   - Input tokens: **$0.075 / 1,000,000 tokens**
   - Output tokens: **$0.30 / 1,000,000 tokens**
   - Currency conversion at ₹86.50 INR / USD.
@@ -82,7 +82,7 @@ Each scanned field in the **Pre-Save Review Curtain Modal** displays an unmistak
   - **INR Exchange Rate per 1 USD ($)**: Real-time FX multiplier (default ₹86.50/USD, with presets from ₹84.50 to ₹88.00) used across both the client and Express server.
   - **Quota Warning Threshold**: Configurable safety buffer (default 80%) to warn field teams before AI quotas are exhausted.
   - **Per Scan Estimate 5x Anomaly Threshold Guard**:
-    - **Baseline Single Scan Cost**: Standard Gemini 3.8 Flash vision call consumes ~1,740 prompt tokens + ~260 output tokens = **~1.23 paise ($0.0001425)**.
+    - **Baseline Single Scan Cost**: Standard multimodal vision call consumes ~1,740 prompt tokens + ~260 output tokens = **~1.23 paise ($0.0001425)**.
     - **5x Threshold Multiplier (Configurable)**: Automatically sets a ceiling of **5x (~6.16 paise / ₹0.0616)**. Scans that consume excess tokens (due to oversized images, multi-page questionnaires, or high visual noise) are immediately flagged with a `⚠️ >5x Spike` badge.
     - **Configurable Multiplier in Settings**: Field administrators can tune the threshold multiplier with quick presets (`2x`, `3x`, `5x (Default)`, `8x`, `10x`) or enter any custom multiplier with live preview calculations.
 - **Immediate Application-Wide Recalculation**:
@@ -99,6 +99,29 @@ Each scanned field in the **Pre-Save Review Curtain Modal** displays an unmistak
 - **Dual Export Strategy**:
   - Direct 1-click PDF download via client-side `jsPDF`.
   - Built-in High-Fidelity Native Browser Print fallback optimized for A4 paper layout (`@media print` clean margins, crisp vector typography, and no-screen-chrome printing).
+
+### 10. Clinical Data-Extraction Engine & `prompt-reference.md` Integration
+- **Dynamic File Ingestion (`prompt-reference.md`)**:
+  - The AI scanning server dynamically loads `/prompt-reference.md` from the project root at runtime, immediately applying any prompt revisions or clinical rule refinements without requiring code recompilation or server reboots.
+- **Dynamic Layout & Question Discovery**:
+  - Automatically discovers questions and printed row codes in page order rather than assuming fixed templates. If a form layout has different questions, wording, or count, the application dynamically extracts, maps, and displays all discovered rows.
+- **Strict Clinical Decision Rules**:
+  - `YES`: Only affirmative box is marked.
+  - `NO`: Only negative box is marked.
+  - `BOTH`: Both boxes marked with no clear cancellation; automatically flagged for clinician review.
+  - `BLANK`: Entire row unmarked (factual recording; negative triage baseline). An empty NO column is normal and BLANK is preserved verbatim.
+  - `UNCLEAR`: Ambiguous mark or smudge across boxes.
+  - `NOT_APPLICABLE`: Gender-restricted question (e.g. `applies_to: male` for prostate, `applies_to: female` for breast/cervix) left blank. Physically marked rows on gender-inapplicable items are preserved as visual reality and flagged for clinical audit.
+- **Form-Level Summary & Pattern Classification**:
+  - Generates a real-time `summary` object with exact counts (`yes_count`, `no_count`, `blank_count`, `both_count`, `unclear_count`, `not_applicable_count`, `yes_codes`).
+  - Classifies form patterns: `all_yes`, `none_marked`, `all_no_marked`, `yes_only_marked`, or `mixed`, displayed as an interactive summary banner in the Review Curtain.
+- **Header Field Validation & Decomposition**:
+  - Automatically transcribes `name`, `name_transliterated`, `age`, `gender`, `phone` (with Gujarati digit normalization, `phone_digit_count`, and `phone_is_valid_indian_mobile` flag).
+  - Decomposes date and camp location into `day`, `month`, `year`, `date_raw`, and `camp_location`.
+  - Reads camp QR codes (e.g. `CAMP-MH-8519`) from the top right header.
+  - Pre-fills the **Review Curtain Modal** with extracted participant metadata and matches against registered camp rosters.
+- **Unified Active Learning Synthesis**:
+  - Dynamically synthesizes the foundational guidelines of `prompt-reference.md` with continuous human clinical verifications from prior screening sessions.
 
 ---
 

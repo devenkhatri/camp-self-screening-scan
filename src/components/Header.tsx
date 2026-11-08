@@ -19,7 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <>
       {/* Sticky Top Header */}
-      <header className="sticky top-0 z-30 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-colors">
+      <header className="sticky top-0 z-30 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-colors no-print">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-1.5 sm:gap-4 md:gap-8 h-14 sm:h-16">
             {/* Zone 1: Brand wordmark (responsive text) */}
@@ -143,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Mobile-First Bottom Navigation Dock (Visible on Mobile Screens) */}
       <nav
         aria-label="Mobile Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 flex items-center justify-around py-1 px-1 shadow-lg safe-area-bottom transition-colors"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 flex items-center justify-around py-1 px-1 shadow-lg safe-area-bottom transition-colors no-print"
       >
         <button
           onClick={() => setActiveTab('scan')}

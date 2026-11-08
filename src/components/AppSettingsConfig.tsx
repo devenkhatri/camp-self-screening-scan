@@ -388,7 +388,7 @@ export const AppSettingsConfig: React.FC<AppSettingsConfigProps> = ({
                   2. INR Amount of 1 USD (Currency Exchange Rate)
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Set the Indian Rupee valuation for 1 US Dollar. All Gemini multimodal API token expenses billed in USD are dynamically translated to INR (₹) and paise using this configured rate.
+                  Set the Indian Rupee valuation for 1 US Dollar. All multimodal API token expenses billed in USD are dynamically translated to INR (₹) and paise using this configured rate.
                 </p>
               </div>
             </div>

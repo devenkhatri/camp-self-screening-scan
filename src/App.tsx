@@ -16,6 +16,8 @@ import {
   MedicalCamp,
   AppConfiguration,
   DEFAULT_APP_CONFIGURATION,
+  FormSummary,
+  RespondentHeaderInfo,
 } from './types/screening';
 import {
   DEFAULT_SCREENING_QUESTIONS,
@@ -122,6 +124,8 @@ export default function App() {
     campName?: string;
     campLocation?: string;
     doctorInCharge?: string;
+    initialRespondent?: RespondentHeaderInfo;
+    formSummary?: FormSummary;
   } | null>(null);
 
   // Toast notifications
@@ -255,7 +259,7 @@ export default function App() {
   const previousHashes = records.map((r) => r.imageHash).filter(Boolean) as string[];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors print:bg-white print:text-black print:min-h-0 print:p-0 print:m-0">
       {/* Top Header */}
       <Header
         activeTab={activeTab}
@@ -269,7 +273,7 @@ export default function App() {
       />
 
       {/* Main Viewport Container (mobile-friendly padding with bottom dock safe clearance) */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 md:pb-8">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 md:pb-8 print:p-0 print:m-0 print:max-w-none print:w-full">
         {activeTab === 'scan' && (
           <ScannerUpload
             questions={questions}
@@ -350,6 +354,8 @@ export default function App() {
           detectedPatientId={reviewCurtainData.detectedPatientId}
           matchedPatient={reviewCurtainData.matchedPatient}
           activeCamp={activeCamp}
+          initialRespondent={reviewCurtainData.initialRespondent}
+          formSummary={reviewCurtainData.formSummary}
           onConfirmSave={handleConfirmSaveRecord}
           onCancel={() => setReviewCurtainData(null)}
         />

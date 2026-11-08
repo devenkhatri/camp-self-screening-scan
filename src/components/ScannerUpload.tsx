@@ -26,6 +26,8 @@ import {
   ImageQualityReport,
   RegisteredPatient,
   MedicalCamp,
+  FormSummary,
+  RespondentHeaderInfo,
 } from '../types/screening';
 import { sanitizeAndResizeImage } from '../utils/imageProcessing';
 import { getLearnedCorrections, applyLearnedMemoryToAnswers } from '../utils/activeLearning';
@@ -46,6 +48,8 @@ interface ScannerUploadProps {
     campName?: string;
     campLocation?: string;
     doctorInCharge?: string;
+    initialRespondent?: RespondentHeaderInfo;
+    formSummary?: FormSummary;
   }) => void;
   previousHashes: string[];
   onLogUsage: (log: ScanUsageLog) => void;
@@ -93,6 +97,8 @@ interface LowConfidenceReport {
     campName?: string;
     campLocation?: string;
     doctorInCharge?: string;
+    initialRespondent?: RespondentHeaderInfo;
+    formSummary?: FormSummary;
   };
 }
 
@@ -164,7 +170,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
     setErrorMsg(null);
 
     try {
-      setProcessingStep('Sending high-resolution document to Gemini 3.8 Flash multimodal reader...');
+      setProcessingStep('Sending high-resolution document to Clinical Multimodal Vision Reader...');
 
       const learnedCorrections = getLearnedCorrections();
 
@@ -191,7 +197,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
         console.warn('API returned non-JSON payload, applying clinical triage reader fallback:', responseText.slice(0, 200));
         scanResult = {
           success: true,
-          modelUsed: 'gemini-3.8-flash-simulated',
+          modelUsed: 'Clinical Vision Engine (Simulated)',
           isSimulated: true,
           results: questions.filter((q) => q.isActive).map((q) => ({
             code: q.code,
@@ -210,7 +216,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
       setProcessingStep('Mapping answers to question codes & clinical criteria...');
 
       // Map API results back to our standard questions with resilient code/row matching
-      const mappedAnswers: ScannedAnswer[] = questions
+      const mappedStandardAnswers: ScannedAnswer[] = questions
         .filter((q) => q.isActive)
         .map((q) => {
           const match = (scanResult.results || []).find((r: any) => {
@@ -239,6 +245,12 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
               answer: match.answer as 'yes' | 'no' | 'unclear',
               confidence: match.confidence,
               notes: match.notes,
+              rawAnswer: match.rawAnswer,
+              markType: match.markType,
+              writtenText: match.writtenText,
+              needsReview: match.needsReview,
+              questionTextShort: match.questionTextShort,
+              appliesTo: match.appliesTo,
             };
           }
 
@@ -255,6 +267,38 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
             notes: 'Question code not located in image; manual check needed.',
           };
         });
+
+      // Include any newly discovered question rows from the page not present in standard template
+      const discoveredExtraAnswers: ScannedAnswer[] = (scanResult.results || [])
+        .filter((r: any) => {
+          if (!r || !r.code) return false;
+          const codeDigitsR = String(r.code).replace(/\D/g, '');
+          const alreadyMatched = questions.some((q) => {
+            if (String(q.code).trim().toLowerCase() === String(r.code).trim().toLowerCase()) return true;
+            const codeDigitsQ = String(q.code).replace(/\D/g, '');
+            return Boolean(codeDigitsR && codeDigitsQ && codeDigitsR === codeDigitsQ);
+          });
+          return !alreadyMatched;
+        })
+        .map((r: any, idx: number) => ({
+          code: r.code,
+          rowNumber: r.rowNumber || (questions.length + idx + 1),
+          questionText: r.questionTextShort || r.notes || `Discovered Question ${r.code}`,
+          questionTextGu: undefined,
+          category: 'General' as const,
+          scoreYes: 1 as const,
+          answer: r.answer as 'yes' | 'no' | 'unclear',
+          confidence: r.confidence || 0.85,
+          notes: r.notes,
+          rawAnswer: r.rawAnswer,
+          markType: r.markType,
+          writtenText: r.writtenText,
+          needsReview: r.needsReview,
+          questionTextShort: r.questionTextShort,
+          appliesTo: r.appliesTo || 'all',
+        }));
+
+      const mappedAnswers: ScannedAnswer[] = [...mappedStandardAnswers, ...discoveredExtraAnswers];
 
       // Apply active learning memory (past human corrections) to enrich results
       const { enrichedAnswers: finalAnswers } = applyLearnedMemoryToAnswers(mappedAnswers);
@@ -273,7 +317,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
         fileName: file.name,
         formType: scanResult.detectedFormType || 'Physical Paper Form',
         isDuplicate,
-        modelUsed: scanResult.modelUsed || 'gemini-3.8-flash',
+        modelUsed: scanResult.modelUsed || 'Clinical Vision Engine',
         isLiveApi: !scanResult.isSimulated,
         promptTokens,
         candidatesTokens,
@@ -284,11 +328,23 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
         status: finalAnswers.some((a) => a.confidence < 0.65) ? 'FLAGGED_REVIEW' : 'SUCCESS',
       });
 
-      // Extract patient ID from manual input fallback, client-side QR decoder, or server AI vision
-      const detectedPatientId = manualPatientId.trim() || sanitized.detectedQr || scanResult.detectedPatientId || undefined;
-      const matchedPatient = detectedPatientId
+      // Extract patient ID from manual input fallback, client-side QR decoder, or server AI vision (including camp_code from prompt-reference)
+      const detectedPatientId = manualPatientId.trim() || sanitized.detectedQr || scanResult.campCode || scanResult.detectedPatientId || undefined;
+      let matchedPatient = detectedPatientId
         ? registeredPatients.find((p) => p.patientId.toLowerCase() === detectedPatientId.toLowerCase())
         : undefined;
+
+      // Resilient participant matching from prompt-reference respondent header info
+      if (!matchedPatient && scanResult.respondent) {
+        const respPhone = scanResult.respondent.phone ? String(scanResult.respondent.phone).replace(/\D/g, '') : '';
+        const respName = (scanResult.respondent.name || '').trim().toLowerCase();
+
+        matchedPatient = registeredPatients.find((p) => {
+          if (respPhone && p.phone && p.phone.replace(/\D/g, '') === respPhone) return true;
+          if (respName && p.name && p.name.trim().toLowerCase() === respName) return true;
+          return false;
+        });
+      }
 
       const lowConfidenceItems = finalAnswers.filter((a) => a.confidence < 0.6 || a.answer === 'unclear');
       const avgConfidence = finalAnswers.reduce((sum, a) => sum + a.confidence, 0) / (finalAnswers.length || 1);
@@ -301,9 +357,11 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
         scannedAnswers: finalAnswers,
         detectedPatientId,
         matchedPatient,
+        initialRespondent: scanResult.respondent || undefined,
+        formSummary: scanResult.summary || undefined,
         campId: activeCamp?.id,
         campName: activeCamp?.name,
-        campLocation: activeCamp?.location,
+        campLocation: scanResult.respondent?.camp_location || activeCamp?.location,
         doctorInCharge: activeCamp?.doctorInCharge,
       };
 
@@ -721,7 +779,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs text-slate-500 font-mono-tabular flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                Gemini 3.8 Flash Vision
+                Clinical Vision Engine
               </span>
             </div>
           </div>
@@ -765,7 +823,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
                     AI Multimodal Scanner Active
                   </span>
                   <span className="text-[11px] text-slate-200 mt-2 font-mono text-center px-2">
-                    {processingStep || 'Gemini 3.8 Flash Vision'}
+                    {processingStep || 'Clinical Vision Engine'}
                   </span>
                 </div>
               )}
@@ -1005,13 +1063,13 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
                         </span>
                       </div>
                       <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-0.5 font-medium">
-                        {processingStep || 'Transmitting document to Gemini 3.8 Flash Vision model...'}
+                        {processingStep || 'Transmitting document to Clinical Vision Engine...'}
                       </p>
                     </div>
                   </div>
                   <div className="hidden sm:flex flex-col items-end text-right shrink-0">
                     <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-300">
-                      Gemini 3.8 Flash
+                      Clinical Vision Engine
                     </span>
                     <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
                       Physical paper reader
@@ -1045,7 +1103,7 @@ export const ScannerUpload: React.FC<ScannerUploadProps> = ({
                   {isProcessing ? (
                     <>
                       <RefreshCw className="w-4.5 h-4.5 animate-spin text-white" />
-                      <span>Analyzing Form with Gemini AI...</span>
+                      <span>Analyzing Form with Vision AI...</span>
                     </>
                   ) : (
                     <>

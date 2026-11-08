@@ -38,6 +38,49 @@ export interface ScannedAnswer {
   confidence: number; // 0.0 to 1.0
   isOverridden?: boolean;
   notes?: string;
+  rawAnswer?: string; // Original verbatim answer (YES, NO, BOTH, BLANK, UNCLEAR, NOT_APPLICABLE)
+  markType?: string; // tick, cross, fill, circle, text, scribble, none
+  writtenText?: string | null; // Handwritten margin notes or Gujarati/English words
+  needsReview?: boolean; // If flagged for clinical verification
+  questionTextShort?: string; // Concise question wording extracted from form
+  appliesTo?: 'all' | 'male' | 'female'; // Gender restriction
+}
+
+export interface FormSummary {
+  question_count?: number;
+  yes_count?: number;
+  no_count?: number;
+  blank_count?: number;
+  both_count?: number;
+  unclear_count?: number;
+  not_applicable_count?: number;
+  yes_codes?: string[];
+  form_pattern?: 'all_yes' | 'none_marked' | 'all_no_marked' | 'yes_only_marked' | 'mixed' | string;
+}
+
+export interface RespondentHeaderInfo {
+  name?: string | null;
+  name_transliterated?: string | null;
+  age?: number | null;
+  gender?: 'Male' | 'Female' | 'Other' | null;
+  gender_raw?: string | null;
+  phone?: string | null;
+  phone_raw?: string | null;
+  phone_digit_count?: number | null;
+  phone_is_valid_indian_mobile?: boolean | null;
+  date_raw?: string | null;
+  day?: number | null;
+  month?: number | null;
+  year?: number | null;
+  camp_location?: string | null;
+  field_confidence?: {
+    name?: string;
+    age?: string;
+    gender?: string;
+    phone?: string;
+    date_and_location?: string;
+  };
+  field_issues?: string[];
 }
 
 export type RiskBand = 'NO_RISK' | 'LOW_RISK' | 'HIGH_RISK';
